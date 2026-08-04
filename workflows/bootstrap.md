@@ -122,7 +122,10 @@ A verified bootstrap plan containing:
 * Required versions
 * Required baseline structural decisions
 * Blocking unresolved decisions
+* An **environment blocker** is a missing or incompatible local capability that prevents execution or validation of the authorized bootstrap scope but does not require a project decision.
+* Environment blockers
 * Deferrable unresolved decisions
+* Environment blockers must be reported separately from unresolved project decisions.
 * The smallest coherent bootstrap scope
 
 An unresolved decision is **blocking** only when the authorized bootstrap scope cannot proceed correctly without resolving it.
@@ -233,7 +236,8 @@ Evidence that, where applicable:
 
 ## Rules
 
-* Inspect the repository before making changes.
+* Inspect only repository and environment characteristics required by the authorized bootstrap scope and approved project knowledge.
+* Do not treat optional development practices or tools, including version-control initialization, as bootstrap requirements unless approved project knowledge explicitly requires them.
 * Preserve existing user-owned files and changes.
 * Work only within the explicitly authorized bootstrap scope.
 * Use only technologies, tools, services, and versions approved by project knowledge.
@@ -243,8 +247,6 @@ Evidence that, where applicable:
 * Follow `CONVENTIONS.md` where it applies to baseline naming and organization.
 * Distinguish blocking decisions from deferrable decisions based on the authorized bootstrap scope.
 * Do not treat decisions required only by future or out-of-scope subsystems as bootstrap blockers.
-* Distinguish blocking decisions from deferrable decisions.
-* Do not treat out-of-scope or future subsystem decisions as bootstrap blockers.
 * Do not report unrelated repository conditions as bootstrap issues.
 * Record resolved dependency versions using the approved locking mechanism.
 * Prefer the smallest runnable and verifiable baseline.
@@ -287,6 +289,19 @@ When required technology, version, provider, infrastructure, or architectural in
 7. Request clarification only when the missing decision materially blocks progress.
 
 Do not select defaults on the project's behalf when they materially affect the authorized bootstrap scope.
+---
+
+### Environment Blocker
+
+When the authorized bootstrap scope cannot be executed or validated because a required local capability is unavailable or incompatible:
+
+1. Identify the missing or incompatible capability.
+2. Confirm that it is required by approved project knowledge and the authorized bootstrap scope.
+3. Report it separately from unresolved project decisions.
+4. Continue unaffected bootstrap work when possible.
+5. Do not modify project knowledge merely to match the current machine.
+6. Request installation, configuration, or environment correction only when required for progress.
+
 ---
 
 ### Conflicting Information
