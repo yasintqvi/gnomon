@@ -114,18 +114,20 @@ Confirm that the knowledge required to perform the authorized bootstrap scope is
 
 A verified bootstrap plan containing:
 
-* Approved runtimes
-* Approved frameworks
-* Approved tools and infrastructure
-* Required versions and constraints
-* Required baseline structure
+* Required runtimes
+* Required frameworks
+* Required infrastructure services
+* Required versions
+* Required baseline structural decisions
 * Blocking unresolved decisions
 * Deferrable unresolved decisions
 * The smallest coherent bootstrap scope
 
-An unresolved item is blocking only when the authorized bootstrap scope cannot proceed correctly without resolving it.
+An unresolved decision is **blocking** only when the authorized bootstrap scope cannot proceed correctly without resolving it.
 
-Items outside the current scope should be reported as deferred rather than treated as blockers.
+An unresolved decision is **deferrable** when it affects future work but does not prevent completion of the current authorized bootstrap scope.
+
+The workflow must stop only before making a blocking technology or architectural decision.
 
 ---
 
@@ -237,6 +239,8 @@ Evidence that, where applicable:
 * Do not implement business rules, domain behavior, or Specification-driven functionality.
 * Do not introduce structural or architectural decisions not defined by `ARCHITECTURE.md` or an approved ADR.
 * Follow `CONVENTIONS.md` where it applies to baseline naming and organization.
+* Distinguish blocking decisions from deferrable decisions based on the authorized bootstrap scope.
+* Do not treat decisions required only by future or out-of-scope subsystems as bootstrap blockers.
 * Distinguish blocking decisions from deferrable decisions.
 * Do not treat out-of-scope or future subsystem decisions as bootstrap blockers.
 * Do not report unrelated repository conditions as bootstrap issues.
@@ -270,18 +274,17 @@ A runnable and verifiable project baseline ready for later Specification-driven 
 
 ### Missing Information
 
-When required information is missing:
+When required technology, version, provider, infrastructure, or architectural information is missing:
 
 1. Identify the missing decision.
-2. Determine which project document owns it.
-3. Decide whether it blocks the authorized bootstrap scope.
+2. Determine which project document owns that decision.
+3. Determine whether the decision blocks the authorized bootstrap scope.
 4. Stop only the affected work when the decision is blocking.
 5. Continue unaffected bootstrap work when possible.
 6. Report deferrable decisions without resolving them.
-7. Request clarification only when progress materially depends on the decision.
+7. Request clarification only when the missing decision materially blocks progress.
 
-Do not select material technology, provider, tooling, or architecture defaults on the project's behalf.
-
+Do not select defaults on the project's behalf when they materially affect the authorized bootstrap scope.
 ---
 
 ### Conflicting Information
