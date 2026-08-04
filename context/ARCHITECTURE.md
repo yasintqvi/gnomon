@@ -194,6 +194,18 @@ Document architectural patterns that are intentionally used by the system.
 
 ---
 
+## Module Organization
+
+Describe how modules are organized within the project.
+
+Specify:
+
+- Module root location
+- Module boundaries
+- Internal organization
+
+---
+
 ## Evolution Rules
 
 Describe how architectural changes should be handled.
