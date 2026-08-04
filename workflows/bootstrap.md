@@ -95,6 +95,8 @@ A baseline gap analysis identifying:
 * Which parts of the environment are incomplete
 * Which detected issues are relevant to the authorized bootstrap scope
 
+Repository characteristics that are outside the authorized bootstrap scope or not owned by approved project knowledge must not be reported as bootstrap issues.
+
 ---
 
 ### 2. Verify
