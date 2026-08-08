@@ -1,12 +1,8 @@
-# Artifact Contract — [Artifact Type]
+# Artifact Contract — Component
 
 ## Purpose
 
-Define the contract for the `[Artifact Type]` artifact type.
-
-This document establishes the responsibilities, expected behavior, constraints, and required characteristics of artifacts of this type.
-
-It provides implementation guidance without prescribing feature-specific implementation details.
+Define the contract for user-interface components that present state and emit user intent without owning application workflows.
 
 ---
 
@@ -14,11 +10,11 @@ It provides implementation guidance without prescribing feature-specific impleme
 
 **Name**
 
-[Artifact type name]
+UI Component
 
 **Description**
 
-[Define what this artifact type represents.]
+A reusable user-interface artifact with an explicit visual responsibility, typed inputs, emitted user intents, and accessible interaction states.
 
 ---
 
@@ -26,8 +22,8 @@ It provides implementation guidance without prescribing feature-specific impleme
 
 This contract applies to:
 
-* [Artifact category]
-* [Artifact category]
+* Reusable or feature-local user-interface components.
+* Components that display application state or collect user interaction.
 
 This contract does not define:
 
@@ -43,62 +39,66 @@ This contract does not define:
 
 The artifact is responsible for:
 
-* [Responsibility]
-* [Responsibility]
-* [Responsibility]
+* Representing one coherent presentation responsibility from declared input and presentation state.
+* Emitting explicit user intents and presenting loading, success, empty, and error states.
+* Preserving accessibility, keyboard operation, and responsive layout.
 
 The artifact must not take responsibility for:
 
-* [Excluded responsibility]
-* [Excluded responsibility]
+* Enforcing server-authoritative authorization or business invariants.
+* Calling provider SDKs or owning multi-step application orchestration.
 
 ---
 
 ## Inputs
 
-Define the inputs the artifact may receive or depend on.
-
-| Input   | Description   | Required |
-| ------- | ------------- | -------- |
-| [Input] | [Description] | Yes/No   |
+| Input | Description | Required |
+| --- | --- | --- |
+| Typed input | Data and configuration required to render | As declared |
+| Presentation or interaction state | Current interaction and validation state | As required |
+| Composition or content extension points | Explicit extension points for caller-provided content | No |
 
 ---
 
 ## Outputs
 
-Define the outputs or externally observable results produced by the artifact.
-
-| Output   | Description   |
-| -------- | ------------- |
-| [Output] | [Description] |
+| Output | Description |
+| --- | --- |
+| Rendered interface | Accessible UI representing the current state |
+| Typed events | User intent emitted to the owning page or parent |
+| Local interaction state | Ephemeral presentation state that does not replace server state |
 
 ---
 
 ## Behavior
 
-Define the expected behavior of the artifact.
-
-### [Behavior]
+### Render Known State
 
 **Condition**
 
-[When this behavior applies.]
+The component receives valid typed input.
 
 **Expected Behavior**
 
-[Describe the required behavior.]
+It renders deterministic content and exposes only interactions valid for the supplied presentation state.
+
+### Pending or Failed Interaction
+
+**Condition**
+
+An owned form submission is pending or returns validation/application errors.
+
+**Expected Behavior**
+
+The component prevents accidental duplicate actions where required, preserves useful user input, associates errors with controls, and offers a clear recovery path.
 
 ---
 
-### [Behavior]
+### State Ownership
 
-**Condition**
+The component owns only transient presentation state.
 
-[When this behavior applies.]
-
-**Expected Behavior**
-
-[Describe the required behavior.]
+Application state, business state, and workflow state remain owned by the application.
 
 ---
 
@@ -106,75 +106,88 @@ Define the expected behavior of the artifact.
 
 The artifact must:
 
-* [Constraint]
-* [Constraint]
+* Use strongly typed inputs, outputs, and interaction data where supported by the project's technology stack.
+* Provide semantic labels, focus behavior, keyboard access, and non-color-only status cues.
+* Make disabled and pending states explicit.
+* Keep user-facing text in the project's localization resources.
 
 The artifact must not:
 
-* [Constraint]
-* [Constraint]
+* Infer authorization from hidden controls or treat client validation as authoritative.
+* Duplicate domain rules already enforced by the server.
+* Hide network or workflow side effects inside generic presentational components.
+* Display raw provider, stack trace, or internal storage errors.
 
 ---
 
 ## Dependencies
 
-Define dependencies that are allowed or required for this artifact type.
-
 ### Allowed Dependencies
 
-* [Dependency]
-* [Dependency]
+* Presentation framework abstractions approved by the project
+* Typed presentation interfaces
+* Shared UI primitives
+* Localization mechanism
+* Feature-local child components
+* Presentation utilities
 
 ### Restricted Dependencies
 
-* [Dependency]
-* [Dependency]
+* Domain models and Provider-specific implementations
+* Cross-feature global mutable state without an approved application need
 
 ---
 
 ## Error Handling
 
-Define expected error behavior when relevant.
-
-### [Error Condition]
+### Validation Error
 
 **Condition**
 
-[Describe the condition.]
+The server returns field or form-level validation errors.
 
 **Expected Result**
 
-[Describe the required behavior.]
+Show localization-ready messages near the relevant controls, preserve correct input, and move focus or announce the error accessibly.
+
+### Unexpected Failure
+
+**Condition**
+
+An operation fails without a recoverable field-level error.
+
+**Expected Result**
+
+Present a safe general message and an appropriate retry or exit path without exposing internal details.
 
 ---
 
 ## Integration
 
-Describe how this artifact interacts with other parts of the system.
-
-### [Integration]
+### Owning Screen
 
 **Participant**
 
-[Component or artifact]
+Owning interface
 
 **Interaction**
 
-[Describe the interaction.]
+The owning interface supplies presentation data,
+handles navigation or application interaction,
+and reacts to emitted user intent.
 
 **Constraints**
 
-* [Integration constraint]
+* Server responses remain authoritative; local optimistic state must reconcile with them.
 
 ---
 
 ## Verification
 
-Define how an artifact of this type can be verified.
-
-* [Verification requirement]
-* [Verification requirement]
-* [Verification requirement]
+* Component tests cover rendering, emitted intent, pending state, validation errors, and disabled behavior.
+* Accessibility checks cover labels, keyboard navigation, focus, and status announcements.
+* Public inputs and outputs are validated according to the capabilities of the selected project Stack.
+* Tests do not depend on implementation-private DOM structure when accessible roles or labels are available.
 
 ---
 
@@ -183,33 +196,45 @@ Define how an artifact of this type can be verified.
 ### Valid Example
 
 ```text
-[Example]
+A form component receives declared input,
+renders validation state,
+emits user intent,
+prevents duplicate interaction while pending,
+and never executes the application use case directly.
 ```
 
 ### Invalid Example
 
 ```text
-[Example]
+A generic button component
+calls an external service directly,
+performs authorization,
+updates application state,
+and decides business outcomes.
 ```
 
 ---
 
 ## Related Architecture
 
-List architectural rules that directly constrain this artifact type.
+* Application Boundary
+* Application Orchestration
+* Module Boundaries
 
-* [Architecture reference]
 
 ---
 
 ## Related Conventions
 
-List conventions that apply to this artifact type.
-
-* [Convention reference]
+* File Structure
+* Naming
+* Formatting
+* Testing
+* Localization rules
 
 ---
 
 ## Notes
 
-[Optional clarification specific to this artifact type.]
+Owning interface artifacts may coordinate feature-specific interaction.
+Reusable child components should remain narrowly presentation-focused.
