@@ -1,12 +1,10 @@
-# Artifact Contract — [Artifact Type]
+# Artifact Contract — Action
 
 ## Purpose
 
-Define the contract for the `[Artifact Type]` artifact type.
+Define the contract for application Actions that execute one explicit state-changing use case and coordinate application boundaries.
 
-This document establishes the responsibilities, expected behavior, constraints, and required characteristics of artifacts of this type.
-
-It provides implementation guidance without prescribing feature-specific implementation details.
+This contract defines the canonical characteristics of an Action independently of any project, framework, or implementation technology.
 
 ---
 
@@ -14,11 +12,11 @@ It provides implementation guidance without prescribing feature-specific impleme
 
 **Name**
 
-[Artifact type name]
+Application Action
 
 **Description**
 
-[Define what this artifact type represents.]
+An application-layer artifact that executes one explicit state-changing use case, coordinates the required application boundaries, and produces a declared outcome.
 
 ---
 
@@ -26,8 +24,8 @@ It provides implementation guidance without prescribing feature-specific impleme
 
 This contract applies to:
 
-* [Artifact category]
-* [Artifact category]
+* State-changing application use cases.
+* Application orchestration invoked through an authorized application entry point.
 
 This contract does not define:
 
@@ -43,62 +41,63 @@ This contract does not define:
 
 The artifact is responsible for:
 
-* [Responsibility]
-* [Responsibility]
-* [Responsibility]
+* Orchestrating one explicit application use case.
+* Coordinating authorization checks where applicable.
+* Ensuring business invariants are enforced by their owning boundaries.
+* Coordinating persistence, transactions, application capabilities, events, and background work.
+* Returning a declared successful result or an explicit application failure.
 
 The artifact must not take responsibility for:
 
-* [Excluded responsibility]
-* [Excluded responsibility]
+* Parsing transport-specific requests.
+* Producing presentation-layer responses.
+* Implementing provider-specific behavior.
+* Coordinating multiple unrelated use cases.
+* Owning presentation concerns.
 
 ---
 
 ## Inputs
 
-Define the inputs the artifact may receive or depend on.
-
-| Input   | Description   | Required |
-| ------- | ------------- | -------- |
-| [Input] | [Description] | Yes/No   |
+| Input                    | Description                                                      | Required                   |
+| ------------------------ | ---------------------------------------------------------------- | -------------------------- |
+| Declared input           | Validated input required by the use case                         | Yes                        |
+| Authorization context    | Identity or execution context under which the Action executes    | When authorization applies |
+| Application capabilities | Declared application-owned capabilities required by the use case | As required                |
 
 ---
 
 ## Outputs
 
-Define the outputs or externally observable results produced by the artifact.
-
-| Output   | Description   |
-| -------- | ------------- |
-| [Output] | [Description] |
+| Output              | Description                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------- |
+| Declared result     | Explicit successful outcome returned to the caller                                                |
+| Application failure | Stable application-level failure representing an expected rejected outcome                        |
+| Side effects        | Persisted state, emitted events, or scheduled background work explicitly required by the use case |
 
 ---
 
 ## Behavior
 
-Define the expected behavior of the artifact.
-
-### [Behavior]
+### Successful Execution
 
 **Condition**
 
-[When this behavior applies.]
+Input, authorization, current state, and required dependencies satisfy the owning Specification.
 
 **Expected Behavior**
 
-[Describe the required behavior.]
+The Action executes the accepted use case, coordinates the required application boundaries, performs the defined side effects, preserves consistency where required, and returns its declared result.
 
----
-
-### [Behavior]
+### Repeated Execution
 
 **Condition**
 
-[When this behavior applies.]
+The same logical command is retried or submitted more than once.
 
 **Expected Behavior**
 
-[Describe the required behavior.]
+The Action follows the idempotency requirements defined by the owning Specification and must not produce unintended duplicate authoritative effects.
 
 ---
 
@@ -106,75 +105,95 @@ Define the expected behavior of the artifact.
 
 The artifact must:
 
-* [Constraint]
-* [Constraint]
+* Have one public entry method.
+* Represent one explicit application use case.
+* Use explicit declared inputs and outputs, with strong typing where supported by the project Stack.
+* Define explicit transaction boundaries where consistency requires them.
+* Depend only on application-owned interfaces for external capabilities.
+* Schedule background work only after the state it depends on has been durably committed.
 
 The artifact must not:
 
-* [Constraint]
-* [Constraint]
+* Accept transport-specific request objects.
+* Produce presentation-layer output.
+* Return provider-specific objects.
+* Persist transient transport data.
+* Reach into another module's internal implementation or bypass declared interfaces.
 
 ---
 
 ## Dependencies
 
-Define dependencies that are allowed or required for this artifact type.
-
 ### Allowed Dependencies
 
-* [Dependency]
-* [Dependency]
+* Domain entities
+* Value objects
+* Policies
+* Repositories
+* Application-owned interfaces
+* Data objects
+* Transactions
+* Events
+* Background work abstractions
 
 ### Restricted Dependencies
 
-* [Dependency]
-* [Dependency]
+* Presentation-layer artifacts
+* Provider-specific implementations
+* Another module's internal implementation
 
 ---
 
 ## Error Handling
 
-Define expected error behavior when relevant.
-
-### [Error Condition]
+### Expected Rejection
 
 **Condition**
 
-[Describe the condition.]
+Authorization, validation, conflict, or state preconditions reject the command.
 
 **Expected Result**
 
-[Describe the required behavior.]
+The Action returns or throws a stable application-level failure without partial state changes or protected-data leakage.
+
+### Dependency Failure
+
+**Condition**
+
+A required persistence operation or external capability fails.
+
+**Expected Result**
+
+The Action preserves transactional consistency, translates boundary failures where appropriate, and leaves retry behavior explicit.
 
 ---
 
 ## Integration
 
-Describe how this artifact interacts with other parts of the system.
-
-### [Integration]
+### Application Boundary
 
 **Participant**
 
-[Component or artifact]
+Authorized application entry point
 
 **Interaction**
 
-[Describe the interaction.]
+The participant maps incoming input into the Action's declared input, invokes the Action, and handles its declared result.
 
 **Constraints**
 
-* [Integration constraint]
+* Business rules must not be duplicated at the delivery boundary.
+* Delivery-specific concerns remain outside the Action.
 
 ---
 
 ## Verification
 
-Define how an artifact of this type can be verified.
-
-* [Verification requirement]
-* [Verification requirement]
-* [Verification requirement]
+* Tests cover successful execution, expected rejection, authorization, dependency failure, and idempotency where applicable.
+* Dependencies can be substituted with test doubles through application-owned interfaces.
+* The Action contains no presentation-specific behavior.
+* The Action contains no provider-specific behavior.
+* Declared inputs and outputs are validated according to the capabilities of the selected project Stack.
 
 ---
 
@@ -183,33 +202,57 @@ Define how an artifact of this type can be verified.
 ### Valid Example
 
 ```text
-[Example]
+ConfirmFileUploadAction
+
+Receives validated upload input.
+
+Coordinates authorization.
+
+Verifies current state.
+
+Registers one authoritative file record.
+
+Schedules downstream processing after commit.
+
+Returns a declared successful result.
 ```
 
 ### Invalid Example
 
 ```text
-[Example]
+A delivery endpoint validates input,
+performs authorization,
+updates multiple records,
+calls an external provider directly,
+schedules background work,
+and constructs the response without an application Action.
 ```
 
 ---
 
 ## Related Architecture
 
-List architectural rules that directly constrain this artifact type.
-
-* [Architecture reference]
+* Application Boundary
+* Application Orchestration
+* Module Boundaries
 
 ---
 
 ## Related Conventions
 
-List conventions that apply to this artifact type.
-
-* [Convention reference]
+* Action and Data Objects
+* Background Work and Idempotency
+* Ports and Adapters
+* Error Handling
 
 ---
 
 ## Notes
 
-[Optional clarification specific to this artifact type.]
+An Action implements an application use case defined elsewhere.
+
+Business behavior remains defined by the relevant Specification and Domain knowledge.
+
+Technology-specific implementation details remain defined by the project Stack.
+
+An Action coordinates behavior; it does not become the authoritative owner of business rules, presentation behavior, or transport concerns.
