@@ -2,36 +2,17 @@
 
 ## Purpose
 
-Define the execution process for the **Review Artifact** intent.
+Define the execution process for the Review intent.
 
-This workflow describes how the system evaluates an existing artifact against approved project knowledge and produces actionable findings without introducing new product, business, or architectural decisions.
+Review evaluates an artifact using reusable engineering questions together with project knowledge and available verification evidence.
 
-The workflow may review any project artifact, including documentation, specifications, architecture, implementation, tests, configurations, or other approved project assets.
+The objective is to identify engineering findings that cannot be established through rule-based verification alone.
 
 ---
 
 ## Intent
 
-Evaluate an existing artifact for correctness, consistency, completeness, and compliance with approved project knowledge.
-
----
-
-## When to Use
-
-Use this workflow when:
-
-* An artifact must be reviewed before approval or implementation.
-* An implementation must be evaluated after completion.
-* Documentation, Specifications, Architecture, ADRs, or Contracts require validation.
-* A pull request or change set requires review.
-* Project consistency must be verified.
-
-Do not use this workflow when:
-
-* The requested work is implementation rather than evaluation.
-* The requested behavior has not yet been defined.
-* The task requires creating new project knowledge.
-* The objective is automated verification through testing rather than analytical review.
+Evaluate whether the current implementation and evaluation sufficiently address relevant engineering scenarios.
 
 ---
 
@@ -39,23 +20,35 @@ Do not use this workflow when:
 
 ### User Input
 
-The artifact to review, review scope, explicit review objectives, and any user-defined constraints.
+- Review target
+- Review scope
+- Constraints
 
 ### Project Context
 
-The current project state, related artifacts, repository contents, and approved project knowledge.
+- Repository
+- Related artifacts
 
 ### Required Knowledge
 
-* Relevant Specification
-* Relevant Domain knowledge
-* `ARCHITECTURE.md`
-* `STACK.md`
-* `CONVENTIONS.md`
-* Applicable ADRs
-* Applicable Artifact Contracts
-* `REVIEW_CHECKLIST.md`
-* Existing project artifacts related to the review target
+- Relevant Specifications
+- DOMAIN
+- ARCHITECTURE
+- STACK
+- ADRs
+- Contracts
+
+### Evaluation Assets
+
+ENGINEERING_REVIEW_QUESTIONS.md
+
+### Optional Inputs
+
+Verification Evidence
+
+If verification evidence exists, it should be consumed.
+
+If unavailable, the review should explicitly report reduced confidence.
 
 ---
 
@@ -63,239 +56,142 @@ The current project state, related artifacts, repository contents, and approved 
 
 ### 1. Understand
 
-#### Purpose
+Determine:
 
-Understand the artifact being reviewed, its intended purpose, ownership, and review boundaries.
-
-#### Required Knowledge
-
-* Target artifact
-* User-defined scope
-* Relevant project knowledge
-
-#### Expected Result
-
-A clearly defined review scope containing:
-
-* Target artifact
-* Intended purpose
-* Applicable project knowledge
-* Explicit exclusions
-* Review boundaries
+- Review target
+- Scope
+- Applicable project knowledge
 
 ---
 
-### 2. Inspect
+### 2. Load Questions
 
-#### Purpose
+Load applicable engineering review questions.
 
-Inspect the artifact and identify its observable behavior, structure, dependencies, assumptions, and responsibilities.
-
-#### Required Knowledge
-
-* Target artifact
-* Related project artifacts
-* Applicable contracts
-
-#### Expected Result
-
-An inspection summary identifying:
-
-* Existing behavior
-* Responsibilities
-* Dependencies
-* Assumptions
-* Missing information
-* Relevant relationships
+Ignore questions outside the authorized scope.
 
 ---
 
 ### 3. Evaluate
 
+For every applicable question:
+
+Evaluate using:
+
+- Artifact
+- Project Knowledge
+- Verification Evidence (when available)
+
+Determine whether the current evaluation sufficiently addresses the engineering scenario.
+
+---
+
+### 4. Produce Findings
+
+Possible outcomes:
+
+- PASS
+- DEFECT
+- RISK
+- KNOWLEDGE GAP
+- NOT APPLICABLE
+
+Supporting reasoning is mandatory.
+
+---
+
+### 5. Determine Resolution
+
 #### Purpose
 
-Evaluate the artifact against approved project knowledge.
+Determine the appropriate resolution path for every approved finding.
+
+Review does not resolve findings.
+
+Instead, it identifies the owning project artifact responsible for resolving each finding.
 
 #### Required Knowledge
 
-* Relevant Specification
-* Domain
+* Classified Findings
+* Applicable Project Knowledge
+
+#### Expected Result
+
+Every finding identifies:
+
+* Finding Classification
+* Resolution Owner
+* Whether an explicit project decision is required
+* Recommended next workflow
+
+Possible Resolution Owners include:
+
+* Implementation
+* Specification
 * Architecture
-* ADRs
-* Conventions
-* Artifact Contracts
-* Review Checklist
+* ADR
+* Contract
+* Workflow
+* Evaluation
+* Documentation
 
-#### Expected Result
+If resolving a finding requires a new product, business, or architectural decision, the finding must be marked as **Decision Required**.
 
-An evidence-based evaluation identifying:
-
-* Compliance
-* Violations
-* Inconsistencies
-* Missing requirements
-* Unnecessary complexity
-* Maintainability concerns
-* Potential risks
+The Review workflow must not invent or approve such decisions.
 
 ---
 
-### 4. Classify
+### Primary Output
 
-#### Purpose
+An evidence-based engineering review report.
 
-Classify every finding according to its nature and impact.
+### Supporting Outputs
 
-#### Required Knowledge
-
-* Evaluation results
-* Review Checklist
-
-#### Expected Result
-
-Every finding is classified using appropriate categories, such as:
-
-* Defect
-* Requirement mismatch
-* Contract violation
-* Architectural violation
-* Convention violation
-* Documentation issue
-* Improvement opportunity
-* Risk
-* Recommendation
-
-Each finding should include an estimated severity and sufficient evidence.
+* Classified Findings
+* Resolution Owner for every finding
+* Decision Required indicators
+* Risk Assessment
+* Compliance Summary
+* Remaining Uncertainties
 
 ---
 
-### 5. Report
+### Finding Identity
 
-#### Purpose
+Every actionable finding must receive a unique identifier within the review report.
 
-Produce an actionable review report.
+Identifiers must use the following format:
 
-#### Required Knowledge
+`F-001`, `F-002`, `F-003`, ...
 
-* Classified findings
+The identifier must remain stable when the same review result is referenced for approval or resolution.
 
-#### Expected Result
-
-A structured review report containing:
-
-* Review scope
-* Reviewed artifacts
-* Positive observations
-* Actionable findings
-* Severity
-* Supporting evidence
-* Remaining uncertainties
-* Recommended next actions
+Related observations that share the same underlying issue should not receive separate identifiers unless they require independent resolution.
 
 ---
 
 ## Rules
 
-* Review existing artifacts without redefining project knowledge.
-* Base every finding on evidence from approved project knowledge.
-* Distinguish facts from assumptions.
-* Do not invent missing requirements.
-* Do not introduce new business rules.
-* Do not introduce new architectural decisions.
-* Respect the ownership of every project document.
-* Separate confirmed defects from improvement suggestions.
-* Report uncertainty explicitly.
-* Preserve existing user-owned work.
-* Produce actionable findings rather than subjective opinions.
-* Explain why each finding matters.
-
-The workflow must not introduce business rules that are not defined by the relevant Specification or Domain.
-
-The workflow must not introduce architectural rules that are not defined by the Architecture or an approved ADR.
-
----
-
-## Outputs
-
-### Primary Output
-
-An evidence-based review report.
-
-### Supporting Outputs
-
-* Classified findings
-* Improvement recommendations
-* Risk assessment
-* Compliance summary
-* Remaining uncertainties
-
----
-
-## Failure Handling
-
-### Missing Information
-
-When required knowledge is unavailable:
-
-1. Identify the missing information.
-2. Determine which project document owns it.
-3. Continue reviewing unaffected areas where possible.
-4. Report review limitations explicitly.
-5. Request clarification only when it materially affects the review.
-
-Do not invent missing project knowledge.
-
----
-
-### Conflicting Information
-
-When project knowledge conflicts:
-
-1. Identify the conflicting sources.
-2. Apply the project's knowledge ownership rules.
-3. Report the conflict explicitly.
-4. Avoid selecting one interpretation without authority.
-5. Continue reviewing unaffected areas when possible.
-
----
-
-### Insufficient Evidence
-
-When available evidence is insufficient:
-
-1. Report the limitation.
-2. Avoid speculative conclusions.
-3. Mark the finding as inconclusive.
-4. Recommend additional evidence when appropriate.
+- Review must not redefine project knowledge.
+- Review must distinguish facts from engineering reasoning.
+- Review must report uncertainty explicitly.
+- Review may recommend creating new project knowledge when required.
+- Review must not silently assume undefined behavior.
+Review identifies findings.
+- Review must not propose implementation solutions.
+- When a finding requires a project decision, the outcome shall be reported as a Knowledge Gap.
+- Review must not repeat verification evidence unless required to support a finding.
+* Review must not resolve findings directly.
+* Review must not modify project knowledge.
+* Review must not modify implementation.
+* Review must identify the appropriate Resolution Owner for every finding.
+* Review must explicitly indicate whether resolving a finding requires a new project decision.
+* Review recommendations are not approved actions and require explicit user approval before resolution.
 
 ---
 
 ## Completion Criteria
 
-The workflow is complete when:
-
-* The authorized review scope has been evaluated.
-* Applicable project knowledge has been considered.
-* Findings are evidence-based.
-* Findings are classified.
-* Actionable recommendations have been produced.
-* Remaining uncertainties have been reported.
-* No new project knowledge has been introduced.
-
----
-
-## Workflow Constraints
-
-* Review evaluates existing artifacts; it does not create new ones.
-* Review must remain within the authorized scope.
-* Recommendations must not be presented as approved decisions.
-* Review should prioritize correctness, consistency, maintainability, and compliance.
-* Review should minimize subjective judgment.
-
----
-
-## Notes
-
-Review may reveal missing Specifications, weak Contracts, architectural inconsistencies, implementation defects, documentation gaps, or testing deficiencies.
-
-Such findings should be reported to the document or workflow that owns the unresolved issue rather than being resolved implicitly during review.
+* Review completes when every applicable engineering question has been evaluated.
+* Every finding has an identified Resolution Owner.
+* Findings requiring explicit project decisions have been identified.
