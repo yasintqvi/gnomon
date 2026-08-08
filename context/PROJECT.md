@@ -117,6 +117,29 @@ These principles should remain at the project level and should not duplicate arc
 
 ---
 
+## User Interface
+
+### Audience
+
+Describe the primary users of the application.
+
+### Interface Language
+
+Specify:
+
+* Primary user-facing language
+* Default interface direction
+
+### User Experience
+
+Describe:
+
+* Desired visual style
+* Usability goals
+* Accessibility expectations
+* Overall interaction principles
+---
+
 ## Dependencies
 
 Document important external dependencies that are fundamental to the project.
