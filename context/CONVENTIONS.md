@@ -213,19 +213,6 @@ Examples:
 
 ---
 
-## Localization
-
-* All user-facing text must use the project's localization mechanism.
-* User-facing strings must not be hardcoded directly in controllers, components, views, validation responses, notifications, or other presentation-layer code.
-* Translation keys must be used for labels, buttons, validation messages, status text, notifications, empty states, errors, and other user-visible content.
-* The default application locale must be defined explicitly by project configuration.
-* Feature implementations should reuse existing translation keys before introducing new ones whenever appropriate.
-* Translation keys should be organized by feature or domain context using stable, descriptive names.
-* Business logic must remain independent of any specific language.
-* Internal technical messages that are never exposed to end users do not require localization.
-
----
-
 ## Evolution Rules
 
 * New conventions should be added only when they solve a recurring consistency problem.
