@@ -1,12 +1,8 @@
-# Artifact Contract — [Artifact Type]
+# Artifact Contract — Migration
 
 ## Purpose
 
-Define the contract for the `[Artifact Type]` artifact type.
-
-This document establishes the responsibilities, expected behavior, constraints, and required characteristics of artifacts of this type.
-
-It provides implementation guidance without prescribing feature-specific implementation details.
+Define the contract for database migration artifacts that evolve the application's persistent schema safely, explicitly, and reproducibly.
 
 ---
 
@@ -14,11 +10,11 @@ It provides implementation guidance without prescribing feature-specific impleme
 
 **Name**
 
-[Artifact type name]
+Migration
 
 **Description**
 
-[Define what this artifact type represents.]
+A version-controlled schema change that evolves the application's persistent data model.
 
 ---
 
@@ -26,8 +22,9 @@ It provides implementation guidance without prescribing feature-specific impleme
 
 This contract applies to:
 
-* [Artifact category]
-* [Artifact category]
+* Creating or modifying persistent schema structures.
+* Schema evolution required by application features.
+* Schema compatibility across application versions.
 
 This contract does not define:
 
@@ -43,62 +40,60 @@ This contract does not define:
 
 The artifact is responsible for:
 
-* [Responsibility]
-* [Responsibility]
-* [Responsibility]
+* Applying one coherent schema change deterministically.
+* Preserving structural integrity through explicit constraints.
+* Maintaining compatibility with the application's deployment strategy.
+* Providing a safe rollback whenever the change is technically reversible.
 
 The artifact must not take responsibility for:
 
-* [Excluded responsibility]
-* [Excluded responsibility]
+* Executing business workflows.
+* Executing application use cases.
+* Performing hidden destructive data transformations.
+* Coordinating application behavior outside schema evolution.
 
 ---
 
 ## Inputs
 
-Define the inputs the artifact may receive or depend on.
-
-| Input   | Description   | Required |
-| ------- | ------------- | -------- |
-| [Input] | [Description] | Yes/No   |
+| Input                  | Description                                                   | Required |
+| ---------------------- | ------------------------------------------------------------- | -------- |
+| Existing schema state  | Schema produced by previously applied migrations              | Yes      |
+| Approved data model    | Required entities, attributes, relationships, and constraints | Yes      |
+| Deployment constraints | Compatibility or rollout limitations affecting the migration  | No       |
 
 ---
 
 ## Outputs
 
-Define the outputs or externally observable results produced by the artifact.
-
-| Output   | Description   |
-| -------- | ------------- |
-| [Output] | [Description] |
+| Output             | Description                                   |
+| ------------------ | --------------------------------------------- |
+| Updated schema     | Persistent schema after successful migration  |
+| Rollback operation | Reverse transition when rollback is supported |
 
 ---
 
 ## Behavior
 
-Define the expected behavior of the artifact.
-
-### [Behavior]
+### Apply
 
 **Condition**
 
-[When this behavior applies.]
+The migration executes against the expected preceding schema.
 
 **Expected Behavior**
 
-[Describe the required behavior.]
+The migration applies the complete schema change or fails without leaving the schema in an inconsistent state.
 
----
-
-### [Behavior]
+### Roll Back
 
 **Condition**
 
-[When this behavior applies.]
+The migration is reversed in a supported environment.
 
 **Expected Behavior**
 
-[Describe the required behavior.]
+Only structures introduced by that migration are removed. Irreversible changes must be explicitly documented and handled through an approved deployment strategy.
 
 ---
 
@@ -106,75 +101,76 @@ Define the expected behavior of the artifact.
 
 The artifact must:
 
-* [Constraint]
-* [Constraint]
+* Declare schema structures explicitly.
+* Define constraints, relationships, defaults, and indexes explicitly where applicable.
+* Consider existing production data, compatibility, and deployment safety.
+* Use consistent temporal data representations across the project.
 
 The artifact must not:
 
-* [Constraint]
-* [Constraint]
+* Depend on application-layer artifacts.
+* Depend on presentation-layer artifacts.
+* Invoke external systems.
+* Execute application behavior.
+* Silently delete or rewrite material data without an approved migration strategy.
+* Store large binary objects inside the relational schema unless explicitly required by the approved data model.
 
 ---
 
 ## Dependencies
 
-Define dependencies that are allowed or required for this artifact type.
-
 ### Allowed Dependencies
 
-* [Dependency]
-* [Dependency]
+* Project-approved schema definition facilities
+* Database-native schema capabilities required for structural definition
 
 ### Restricted Dependencies
 
-* [Dependency]
-* [Dependency]
+* Application-layer artifacts
+* Presentation-layer artifacts
+* External services
+* Infrastructure capabilities unrelated to schema evolution
 
 ---
 
 ## Error Handling
 
-Define expected error behavior when relevant.
-
-### [Error Condition]
+### Invalid Schema State
 
 **Condition**
 
-[Describe the condition.]
+The expected prior schema or required database capability is unavailable.
 
 **Expected Result**
 
-[Describe the required behavior.]
+The migration fails explicitly with actionable diagnostic information. No partial schema change is considered successful.
 
 ---
 
 ## Integration
 
-Describe how this artifact interacts with other parts of the system.
-
-### [Integration]
+### Persistence Layer
 
 **Participant**
 
-[Component or artifact]
+Persistent storage layer
 
 **Interaction**
 
-[Describe the interaction.]
+Application persistence artifacts rely on the schema only after the migration has been successfully applied.
 
 **Constraints**
 
-* [Integration constraint]
+* Deployment order must preserve compatibility between the application and the persistent schema.
 
 ---
 
 ## Verification
 
-Define how an artifact of this type can be verified.
-
-* [Verification requirement]
-* [Verification requirement]
-* [Verification requirement]
+* The migration applies successfully from the expected preceding schema.
+* Rollback succeeds whenever declared reversible.
+* Declared constraints enforce the intended structural invariants.
+* A clean environment can execute the complete migration sequence successfully.
 
 ---
 
@@ -183,33 +179,42 @@ Define how an artifact of this type can be verified.
 ### Valid Example
 
 ```text
-[Example]
+Create a new persistent entity with explicit identifiers,
+relationships, constraints, indexes, timestamps,
+and any required uniqueness rules.
 ```
 
 ### Invalid Example
 
 ```text
-[Example]
+Create generic fields with implicit semantics,
+omit required constraints,
+modify application data silently,
+and rely on application logic alone to preserve integrity.
 ```
 
 ---
 
 ## Related Architecture
 
-List architectural rules that directly constrain this artifact type.
-
-* [Architecture reference]
+* Persistence Layer
+* Data Model
+* Deployment Strategy
 
 ---
 
 ## Related Conventions
 
-List conventions that apply to this artifact type.
-
-* [Convention reference]
+* Naming
+* Error Handling
+* Documentation
 
 ---
 
 ## Notes
 
-[Optional clarification specific to this artifact type.]
+A Migration defines how the persistent schema evolves.
+
+The owning Specification and approved data model define what the schema must represent.
+
+Technology-specific migration mechanisms remain defined by the project Stack.

@@ -1,12 +1,8 @@
-# Artifact Contract — [Artifact Type]
+# Artifact Contract — Form
 
 ## Purpose
 
-Define the contract for the `[Artifact Type]` artifact type.
-
-This document establishes the responsibilities, expected behavior, constraints, and required characteristics of artifacts of this type.
-
-It provides implementation guidance without prescribing feature-specific implementation details.
+Define the contract for input-validation artifacts that authorize, normalize, and validate incoming application commands before they reach the application layer.
 
 ---
 
@@ -14,11 +10,11 @@ It provides implementation guidance without prescribing feature-specific impleme
 
 **Name**
 
-[Artifact type name]
+Input Validation
 
 **Description**
 
-[Define what this artifact type represents.]
+A delivery-boundary artifact that converts untrusted input into validated data suitable for constructing the application's declared input model.
 
 ---
 
@@ -26,8 +22,10 @@ It provides implementation guidance without prescribing feature-specific impleme
 
 This contract applies to:
 
-* [Artifact category]
-* [Artifact category]
+* Input authorization.
+* Structural validation.
+* Safe normalization of incoming data.
+* Delivery-boundary validation concerns.
 
 This contract does not define:
 
@@ -43,62 +41,60 @@ This contract does not define:
 
 The artifact is responsible for:
 
-* [Responsibility]
-* [Responsibility]
-* [Responsibility]
+* Rejecting malformed, missing, unsupported, or unauthorized input.
+* Producing validated scalar and structured data with stable field names.
+* Returning localization-ready validation failures through the delivery boundary.
 
 The artifact must not take responsibility for:
 
-* [Excluded responsibility]
-* [Excluded responsibility]
+* Persisting application state.
+* Executing application use cases.
+* Scheduling background work.
+* Verifying facts that require external side effects or business workflow execution.
 
 ---
 
 ## Inputs
 
-Define the inputs the artifact may receive or depend on.
-
-| Input   | Description   | Required |
-| ------- | ------------- | -------- |
-| [Input] | [Description] | Yes/No   |
+| Input                 | Description                                                   | Required    |
+| --------------------- | ------------------------------------------------------------- | ----------- |
+| Incoming request data | Untrusted values received through the delivery boundary       | Yes         |
+| Authorization context | Current execution identity when authorization applies         | As required |
+| Resource context      | Referenced resources required for authorization or validation | As required |
 
 ---
 
 ## Outputs
 
-Define the outputs or externally observable results produced by the artifact.
-
-| Output   | Description   |
-| -------- | ------------- |
-| [Output] | [Description] |
+| Output                  | Description                                                             |
+| ----------------------- | ----------------------------------------------------------------------- |
+| Validated input         | Authorized, structurally valid data ready for application-layer mapping |
+| Validation failures     | Stable field-level validation failures                                  |
+| Authorization rejection | Safe rejection without protected-resource disclosure                    |
 
 ---
 
 ## Behavior
 
-Define the expected behavior of the artifact.
-
-### [Behavior]
+### Valid Input
 
 **Condition**
 
-[When this behavior applies.]
+Authorization succeeds and all declared structural rules pass.
 
 **Expected Behavior**
 
-[Describe the required behavior.]
+The artifact exposes only validated values for mapping into the application's declared input model.
 
----
-
-### [Behavior]
+### Invalid or Unauthorized Input
 
 **Condition**
 
-[When this behavior applies.]
+Authorization fails or one or more validation rules fail.
 
 **Expected Behavior**
 
-[Describe the required behavior.]
+Processing stops before the application use case executes, returning stable validation or authorization failures without side effects.
 
 ---
 
@@ -106,75 +102,88 @@ Define the expected behavior of the artifact.
 
 The artifact must:
 
-* [Constraint]
-* [Constraint]
+* Treat all client-supplied data as untrusted.
+* Keep accepted values, formats, units, and required fields explicit.
+* Use the project's authorization capabilities rather than duplicating authorization logic.
+* Keep machine-readable error identifiers separate from localized display text.
 
 The artifact must not:
 
-* [Constraint]
-* [Constraint]
+* Trust client-provided metadata as authoritative facts.
+* Persist state.
+* Invoke external capabilities.
+* Schedule background work.
+* Execute application use cases.
+* Contain transactional business workflow.
 
 ---
 
 ## Dependencies
 
-Define dependencies that are allowed or required for this artifact type.
-
 ### Allowed Dependencies
 
-* [Dependency]
-* [Dependency]
+* Project-approved validation facilities
+* Project-approved authorization facilities
+* Enumerations
+* Value parsers
+* Read-only lookup rules appropriate to the delivery boundary
 
 ### Restricted Dependencies
 
-* [Dependency]
-* [Dependency]
+* Application use-case artifacts
+* Provider-specific implementations
+* Infrastructure services that modify application state
 
 ---
 
 ## Error Handling
 
-Define expected error behavior when relevant.
-
-### [Error Condition]
+### Malformed Input
 
 **Condition**
 
-[Describe the condition.]
+Input cannot be normalized safely or violates a declared structural constraint.
 
 **Expected Result**
 
-[Describe the required behavior.]
+Return field-addressable validation failures and execute no application use case.
+
+### Unauthorized Resource
+
+**Condition**
+
+The actor is not permitted to access or modify the referenced resource.
+
+**Expected Result**
+
+Return the project's safe authorization response without exposing protected-resource details.
 
 ---
 
 ## Integration
 
-Describe how this artifact interacts with other parts of the system.
-
-### [Integration]
+### Delivery Boundary
 
 **Participant**
 
-[Component or artifact]
+Application entry point
 
 **Interaction**
 
-[Describe the interaction.]
+The entry point receives validated input and maps it explicitly into the application's declared input model.
 
 **Constraints**
 
-* [Integration constraint]
+* Unvalidated values must never bypass the validation artifact.
 
 ---
 
 ## Verification
 
-Define how an artifact of this type can be verified.
-
-* [Verification requirement]
-* [Verification requirement]
-* [Verification requirement]
+* Tests cover required, malformed, boundary, unsupported, and unauthorized inputs.
+* Invalid requests never execute the application use case.
+* Only validated values can be mapped into the application's declared input model.
+* Validation failures are stable and localization-ready.
 
 ---
 
@@ -183,33 +192,45 @@ Define how an artifact of this type can be verified.
 ### Valid Example
 
 ```text
-[Example]
+Validate uploaded file metadata, declared category, size,
+duration, and referenced resource identifiers.
+
+Normalize accepted values.
+
+Map the validated result into the application's declared input model.
 ```
 
 ### Invalid Example
 
 ```text
-[Example]
+Accept unvalidated client metadata,
+persist application state,
+invoke external services,
+schedule background work,
+and execute the application use case directly from the validation artifact.
 ```
 
 ---
 
 ## Related Architecture
 
-List architectural rules that directly constrain this artifact type.
-
-* [Architecture reference]
+* Delivery Boundary
+* Authorization Boundary
+* Application Boundary
 
 ---
 
 ## Related Conventions
 
-List conventions that apply to this artifact type.
-
-* [Convention reference]
+* Action and Data Objects
+* Error Handling
+* Naming
+* Localization
 
 ---
 
 ## Notes
 
-[Optional clarification specific to this artifact type.]
+Input validation complements, but never replaces, application-level business rules or authoritative verification.
+
+The application layer remains the authoritative owner of business behavior.
