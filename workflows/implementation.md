@@ -4,9 +4,9 @@
 
 Define the execution process for the **Implement Approved Change** intent.
 
-This workflow describes how the system transforms approved project knowledge into a verified implementation while preserving architectural boundaries, business rules, and project conventions.
+This workflow describes how the system transforms approved project knowledge into a verified implementation while preserving architectural boundaries, business rules, project constraints, technology choices, and implementation conventions.
 
-Implementation produces or modifies project artifacts but never defines new product, business, or architectural knowledge.
+Implementation produces or modifies project artifacts but never defines new product, business, architectural, or project-policy knowledge.
 
 ---
 
@@ -29,9 +29,10 @@ Do not use this workflow when:
 
 * Product behavior is still undefined.
 * Architecture is still being designed.
+* Project-wide policy or experience requirements are still undefined.
 * The task is limited to environment setup.
 * The task is limited to review or testing.
-* The requested change requires a new business or architectural decision.
+* The requested change requires a new business, architectural, or project-policy decision.
 
 ---
 
@@ -49,6 +50,7 @@ The current repository, existing implementation, project structure, related arti
 
 * Relevant Specification
 * Relevant Domain knowledge
+* `PROJECT.md`
 * `ARCHITECTURE.md`
 * `STACK.md`
 * `CONVENTIONS.md`
@@ -64,12 +66,13 @@ The current repository, existing implementation, project structure, related arti
 
 #### Purpose
 
-Understand the approved behavior, implementation scope, constraints, and expected outcome.
+Understand the approved behavior, project-level constraints, implementation scope, and expected outcome.
 
 #### Required Knowledge
 
 * Relevant Specification
 * Relevant Domain knowledge
+* Relevant project-level requirements from `PROJECT.md`
 
 #### Expected Result
 
@@ -78,7 +81,7 @@ A complete understanding of:
 * Requested behavior
 * Acceptance criteria
 * Scope
-* Constraints
+* Project-level constraints
 * Assumptions
 * Explicit exclusions
 
@@ -93,9 +96,11 @@ Analyze the existing implementation and determine the smallest coherent implemen
 #### Required Knowledge
 
 * Existing implementation
-* Architecture
+* `ARCHITECTURE.md`
+* `STACK.md`
 * Applicable ADRs
 * Applicable Artifact Contracts
+* Relevant `CONVENTIONS.md`
 
 #### Expected Result
 
@@ -105,6 +110,9 @@ An implementation impact analysis identifying:
 * Required modifications
 * Dependencies
 * Integration points
+* Applicable technology choices
+* Applicable conventions
+* Applicable Artifact Contracts
 * Risks
 * Affected artifacts
 * Required verification scope
@@ -120,7 +128,10 @@ Design how the approved behavior maps onto the existing implementation without i
 #### Required Knowledge
 
 * Relevant Specification
+* Relevant project-level requirements
 * Architecture
+* Stack
+* Conventions
 * Applicable Artifact Contracts
 * Existing implementation
 
@@ -133,7 +144,17 @@ An implementation plan defining:
 * Data flow
 * Error handling
 * Integration boundaries
+* Technology usage
+* Reusable project patterns
 * Required implementation artifacts
+
+For user-facing implementation, the plan must also identify:
+
+* Applicable interface requirements from `PROJECT.md`
+* Applicable user-interface and localization conventions
+* Applicable shared interface primitives and interaction patterns
+* Applicable Component Contract requirements
+* Applicable UI technologies defined in `STACK.md`
 
 ---
 
@@ -146,7 +167,9 @@ Create or modify the required implementation artifacts.
 #### Required Knowledge
 
 * Approved implementation plan
-* Project conventions
+* `PROJECT.md`
+* `STACK.md`
+* `CONVENTIONS.md`
 * Existing project patterns
 * Applicable Artifact Contracts
 
@@ -156,11 +179,23 @@ Implementation artifacts that:
 
 * Satisfy the approved Specification
 * Respect project Architecture
+* Respect project-level requirements
+* Use technologies defined by the project Stack
 * Follow project Conventions
+* Follow applicable Artifact Contracts
 * Preserve unrelated behavior
 * Integrate correctly with existing artifacts
 
-Implementation should reuse existing patterns whenever appropriate rather than introducing unnecessary variation.
+Implementation should reuse existing project patterns and shared primitives whenever appropriate rather than introducing unnecessary variation.
+
+For user-facing implementation:
+
+* User-facing text must follow the project's localization conventions.
+* Applicable loading, empty, validation, error, success, disabled, and unavailable states must be represented.
+* Existing shared interface primitives must be reused before introducing new equivalents.
+* Component state ownership and interaction boundaries must follow the applicable Component Contract.
+* Interface language, direction, typography, and experience requirements defined by project knowledge must be preserved.
+* Selected UI libraries and tools must be used only as defined by `STACK.md`.
 
 ---
 
@@ -173,8 +208,11 @@ Verify that the implementation satisfies the approved behavior and remains consi
 #### Required Knowledge
 
 * Relevant Specification
+* `PROJECT.md`
+* `STACK.md`
+* `CONVENTIONS.md`
 * Applicable Artifact Contracts
-* Review Checklist
+* Relevant verification criteria
 * Relevant testing requirements
 
 #### Expected Result
@@ -182,10 +220,21 @@ Verify that the implementation satisfies the approved behavior and remains consi
 Evidence that:
 
 * Acceptance criteria are satisfied.
+* Project-level requirements are respected.
 * Required implementation artifacts were produced.
 * Applicable verification has completed successfully.
-* Architecture and Contracts have been respected.
+* Architecture, Stack, Conventions, and Contracts have been respected.
 * Remaining limitations are explicitly reported.
+
+For user-facing implementation, verification must include applicable checks for:
+
+* Localization
+* Interface language and direction
+* Shared UI pattern reuse
+* Required interface states
+* Accessibility requirements
+* Component contract compliance
+* Use of approved UI technologies
 
 ---
 
@@ -198,17 +247,19 @@ Evidence that:
 * Preserve unrelated user-owned changes.
 * Produce implementation consistent with approved project knowledge.
 * Follow applicable Artifact Contracts.
-* Respect project Architecture, Stack, and Conventions.
+* Respect project Architecture, Project Context, Stack, and Conventions.
 * Avoid speculative implementation.
 * Avoid unnecessary abstraction.
 * Prefer the smallest coherent implementation.
 * Keep generated artifacts internally consistent.
 * Produce verifiable implementation.
-* Never redefine product, business, or architectural knowledge during implementation.
+* Never redefine product, business, architectural, or project-policy knowledge during implementation.
 
 The workflow must not introduce business rules that are not defined by the relevant Specification or Domain.
 
 The workflow must not introduce architectural rules that are not defined by the Architecture or an approved ADR.
+
+The workflow must not introduce project-wide interface, localization, or technology decisions that are not defined by `PROJECT.md`, `CONVENTIONS.md`, or `STACK.md`.
 
 ---
 
@@ -240,7 +291,7 @@ When implementation depends on missing project knowledge:
 4. Stop only the affected implementation work.
 5. Request clarification only when progress materially depends on the missing decision.
 
-Do not invent missing behavior.
+Do not invent missing behavior, project policy, interface rules, or technology choices.
 
 ---
 
@@ -286,9 +337,10 @@ The workflow is complete when:
 
 * The approved Specification has been implemented.
 * Acceptance criteria have been satisfied.
+* Project-level requirements have been respected.
 * Applicable implementation artifacts have been updated.
 * Required verification has completed.
-* Architecture and Contracts remain respected.
+* Architecture, Stack, Conventions, and Contracts remain respected.
 * Existing unrelated behavior has been preserved.
 * Remaining assumptions, risks, and limitations have been reported.
 
@@ -301,6 +353,7 @@ The workflow is complete when:
 * Prefer modification over unnecessary replacement.
 * Prefer minimal, maintainable, and verifiable implementation.
 * Avoid speculative implementation for future requirements.
+* User-facing implementation must not bypass approved localization, shared UI patterns, Component Contracts, or Stack-defined UI technologies.
 
 ---
 
@@ -308,4 +361,4 @@ The workflow is complete when:
 
 Implementation transforms approved project knowledge into executable project artifacts.
 
-Questions about product behavior, architecture, or project policy discovered during implementation should be reported to the document that owns that knowledge rather than being resolved implicitly during coding.
+Questions about product behavior, architecture, project policy, user-interface requirements, or technology selection discovered during implementation should be reported to the document that owns that knowledge rather than being resolved implicitly during coding.
