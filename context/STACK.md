@@ -84,11 +84,35 @@ This document does not cover:
 
 ---
 
-## Frontend
+## User Interface
 
-| Technology   | Version   | Usage   |
-| ------------ | --------- | ------- |
-| [Technology] | [Version] | [Usage] |
+### Styling
+
+[Selected styling approach, framework, or library]
+
+### Localization
+
+[Selected localization mechanism or library]
+
+### Shared UI Components
+
+[Selected component approach or library]
+
+### Notifications
+
+[Selected notification mechanism or library]
+
+### Dialogs
+
+[Selected dialog or confirmation mechanism]
+
+### Icons
+
+[Selected icon system or library]
+
+### Typography
+
+[Selected typography system, font, and loading approach]
 
 ---
 
