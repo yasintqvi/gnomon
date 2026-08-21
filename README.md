@@ -1,107 +1,171 @@
 # AI Software Engineering System
 
-## Overview
+A repository of Markdown templates for running AI-assisted software engineering as an explicit, document-driven process. It separates durable project knowledge, feature requirements, artifact behavior, architectural decisions, execution workflows, and evaluation criteria so an AI agent can load only the sources relevant to a task.
 
-A structured, document-driven system for AI-assisted software engineering.
+This repository is the system itself: it contains no application runtime, package dependencies, build step, or automated test suite.
 
-The goal is to provide AI with a predictable workflow, clear responsibilities, and reliable knowledge sources throughout the software development lifecycle.
+## Principles
 
----
+- AI assists; humans authorize scope and make product or architectural decisions.
+- Approved documents are the source of truth.
+- Each document has one responsibility.
+- Workflows determine which knowledge must be loaded for a task.
+- Verification records objective evidence; review applies engineering judgment.
+- Prefer the smallest coherent change and preserve unrelated work.
+- Add abstractions only when real usage demonstrates a need.
 
-## Philosophy
-
-* AI assists, humans decide.
-* Documents are the source of truth.
-* Every document has a single responsibility.
-* Avoid duplicated knowledge.
-* Prefer deterministic workflows over implicit reasoning.
-* Evolve the system through real-world usage.
-
----
-
-## Core Concepts
-
-* Intent
-* Workflow
-* Specification
-* Context
-* Artifact Contract
-* ADR
-* Verification
-
----
-
-## Directory Structure
+## How the Documents Fit Together
 
 ```text
-.ai-engineering/
+User request
+    |
+    v
+Choose an intent and workflow
+    |
+    v
+Load applicable context, specifications, ADRs, and contracts
+    |
+    v
+Execute the workflow within the authorized scope
+    |
+    v
+Verify objectively ---> Review with engineering judgment
+    |
+    v
+Optionally finalize the approved change in Git
+```
+
+Project knowledge is divided by responsibility:
+
+| Area | Owns |
+| --- | --- |
+| `context/` | Project purpose, domain knowledge, architecture, technology choices, and conventions |
+| `specifications/` | Use-case behavior, scope, flows, rules, and acceptance criteria |
+| `contracts/` | Reusable behavioral boundaries for specific artifact types |
+| `decisions/` | Significant architectural or technical decisions and their consequences |
+| `workflows/` | Repeatable execution processes for common engineering intents |
+| `evaluations/` | Reusable criteria for objective verification and judgment-based review |
+
+Do not duplicate a rule across documents. For example, feature behavior belongs in a specification, cross-feature business rules belong in domain context, structural constraints belong in architecture, and artifact-specific behavior belongs in a contract.
+
+## Repository Contents
+
+```text
+.
 ├── context/
-├── workflows/
+│   ├── PROJECT.md
+│   ├── DOMAIN.md
+│   ├── ARCHITECTURE.md
+│   ├── STACK.md
+│   └── CONVENTIONS.md
 ├── specifications/
+│   └── SPEC-001-use-case-name.md
 ├── contracts/
+│   ├── action.md
+│   ├── component.md
+│   ├── feature-test.md
+│   ├── form.md
+│   └── migration.md
 ├── decisions/
-└── verification/
+│   └── ADR-001-decison-title.md
+├── workflows/
+│   ├── bootstrap.md
+│   ├── implementation.md
+│   ├── testing.md
+│   ├── verification.md
+│   ├── review.md
+│   └── git-finalization.md
+├── evaluations/
+│   ├── VERIFICATION_CRITERIA.md
+│   └── ENGINEERING_REVIEW_QUESTIONS.md
+├── LICENSE
+└── README.md
 ```
 
----
+The files under `context/`, along with the sample specification and ADR, are intentionally unfilled templates. Bracketed text such as `[Project name]` marks content to replace for a real project. The contracts, workflows, and evaluation assets are reusable baselines that may be adapted when a project's established rules require it.
 
-## Execution Flow
+## Document Catalog
 
-```text
-User Prompt
-    ↓
-Intent
-    ↓
-Workflow
-    ↓
-Load Required Documents
-    ↓
-Reason
-    ↓
-Generate
-    ↓
-Verify
-```
+### Context
 
----
+- [`PROJECT.md`](context/PROJECT.md) — project purpose, goals, users, scope, capabilities, constraints, and success criteria.
+- [`DOMAIN.md`](context/DOMAIN.md) — implementation-independent business concepts, terminology, relationships, rules, and boundaries.
+- [`ARCHITECTURE.md`](context/ARCHITECTURE.md) — components, dependencies, interactions, placement rules, structural patterns, and constraints.
+- [`STACK.md`](context/STACK.md) — languages, runtimes, frameworks, libraries, infrastructure, tools, and version policy.
+- [`CONVENTIONS.md`](context/CONVENTIONS.md) — naming, organization, formatting, documentation, testing, error-handling, and consistency rules.
 
-## Document Responsibilities
+### Requirements and decisions
 
-| Document         | Responsibility             |
-| ---------------- | -------------------------- |
-| PROJECT          | Project context            |
-| DOMAIN           | Business knowledge         |
-| ARCHITECTURE     | System structure           |
-| CONVENTIONS      | Implementation consistency |
-| STACK            | Technologies               |
-| SPECIFICATION    | Business requirements      |
-| CONTRACT         | Artifact behavior          |
-| ADR              | Architectural decisions    |
-| REVIEW CHECKLIST | Verification               |
+- [`SPEC-001-use-case-name.md`](specifications/SPEC-001-use-case-name.md) — template for one bounded use case, including flows and acceptance criteria. Copy it for additional specifications and assign each one a unique ID.
+- [`ADR-001-decison-title.md`](decisions/ADR-001-decison-title.md) — template for an architectural decision record, including alternatives, consequences, constraints, and impact. Copy it for additional decisions and assign each one a unique ID.
 
----
+### Artifact contracts
 
-## Knowledge Loading
+- [`action.md`](contracts/action.md) — application-boundary command or use-case action.
+- [`component.md`](contracts/component.md) — reusable user-interface component.
+- [`feature-test.md`](contracts/feature-test.md) — behavior-focused feature or integration test.
+- [`form.md`](contracts/form.md) — input collection, validation, and submission boundary.
+- [`migration.md`](contracts/migration.md) — reversible persistence-schema change.
 
-The active Workflow determines which documents are required for a task.
+Contracts define invariant behavior and verification expectations for an artifact category. A specification still owns feature-specific behavior; architecture owns placement and dependency boundaries.
 
-Not every task requires every document.
+### Workflows
 
----
+| Intent | Workflow | Result |
+| --- | --- | --- |
+| Establish a missing project baseline | [`bootstrap.md`](workflows/bootstrap.md) | Minimal verified structure and configuration required for later work |
+| Build or change approved behavior | [`implementation.md`](workflows/implementation.md) | Coherent implementation plus verification evidence |
+| Design, add, or execute behavioral tests | [`testing.md`](workflows/testing.md) | Test implementation and reproducible test results |
+| Check objective compliance | [`verification.md`](workflows/verification.md) | Per-obligation `PASS`, `FAIL`, or `UNVERIFIABLE` evidence |
+| Evaluate engineering quality and risk | [`review.md`](workflows/review.md) | `PASS`, `DEFECT`, `RISK`, `KNOWLEDGE GAP`, or `NOT APPLICABLE` findings |
+| Prepare and optionally publish Git work | [`git-finalization.md`](workflows/git-finalization.md) | Scoped branch/commit preparation and, only when authorized, push or pull request |
 
-## Design Principles
+Verification and review are deliberately separate. Verification asks whether traceable obligations are objectively satisfied. Review consumes available evidence and applies engineering reasoning; it identifies findings and their owner but does not silently resolve missing product or architectural decisions.
 
-* Single source of truth
-* Separation of concerns
-* Explicit responsibilities
-* Reusable workflows
-* Reusable contracts
-* Minimal duplication
+### Evaluation assets
 
----
+- [`VERIFICATION_CRITERIA.md`](evaluations/VERIFICATION_CRITERIA.md) — reusable checks spanning specifications, domain, architecture, contracts, stack, conventions, documentation, tests, static analysis, and formatting.
+- [`ENGINEERING_REVIEW_QUESTIONS.md`](evaluations/ENGINEERING_REVIEW_QUESTIONS.md) — judgment-based questions covering authorization, authentication, data integrity, state, failures, security, asynchronous or AI work, maintainability, and completeness.
 
-## Repository Evolution
+## Getting Started
 
-This system evolves incrementally.
+1. Copy this repository, or copy its document directories into the target repository.
+2. Replace the placeholders in `context/`, starting with `PROJECT.md` and `DOMAIN.md`, then document the architecture, stack, and conventions that actually exist.
+3. Copy and rename the specification template for each approved use case. Keep requirements and acceptance criteria explicit.
+4. Copy and rename the ADR template whenever a significant decision needs a durable record.
+5. Select the workflow that matches the user's intent. Follow its required-knowledge section rather than loading every document automatically.
+6. Apply only the contracts relevant to the artifacts being created or changed.
+7. Use verification criteria to produce objective evidence, then use review questions when engineering judgment is required.
+8. Use Git finalization only after the change is complete, and treat pushing or opening a pull request as a separate authorization gate.
 
-New documents, workflows, or abstractions should only be introduced when they solve demonstrated problems.
+There is nothing to install or execute in this repository. Its Markdown files can be used directly by people, coding agents, or repository-level agent instructions.
+
+## Usage Example
+
+For an approved feature request:
+
+1. Create a specification from `specifications/SPEC-001-use-case-name.md`.
+2. Select `workflows/implementation.md`.
+3. Load the relevant context, specification, ADRs, and artifact contracts named by the workflow and the change.
+4. Inspect the existing code and patterns before designing the smallest coherent implementation.
+5. Implement and gather reproducible verification evidence.
+6. Run `workflows/verification.md` for objective compliance.
+7. Run `workflows/review.md` if risks, quality, or incomplete knowledge require engineering evaluation.
+8. Resolve findings through their identified owner and repeat the applicable workflow.
+9. When authorized, use `workflows/git-finalization.md` to prepare the Git handoff.
+
+## Extending the System
+
+Add a document only when it has a distinct, demonstrated responsibility:
+
+- Add a specification for a new bounded use case.
+- Add an ADR for a significant decision.
+- Add a contract when an artifact category has reusable behavioral invariants not owned elsewhere.
+- Add or revise a workflow when a recurring engineering intent needs a stable execution process.
+- Add evaluation criteria when a reusable verification obligation or review question is missing.
+
+Keep new documents focused, link them to their authoritative sources, and avoid turning examples or preferences into project requirements.
+
+## License
+
+Released under the [MIT License](LICENSE).
