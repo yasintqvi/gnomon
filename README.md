@@ -61,11 +61,11 @@ Do not duplicate a rule across documents. For example, feature behavior belongs 
 ├── specifications/
 │   └── SPEC-001-use-case-name.md
 ├── contracts/
-│   ├── action.md
-│   ├── component.md
-│   ├── feature-test.md
-│   ├── form.md
-│   └── migration.md
+│   ├── behavior-verification.md
+│   ├── input-qualification.md
+│   ├── interactive-presentation.md
+│   ├── persistent-structure-evolution.md
+│   └── use-case-execution.md
 ├── decisions/
 │   └── ADR-001-decison-title.md
 ├── workflows/
@@ -101,11 +101,11 @@ The files under `context/`, along with the sample specification and ADR, are int
 
 ### Artifact contracts
 
-- [`action.md`](contracts/action.md) — application-boundary command or use-case action.
-- [`component.md`](contracts/component.md) — reusable user-interface component.
-- [`feature-test.md`](contracts/feature-test.md) — behavior-focused feature or integration test.
-- [`form.md`](contracts/form.md) — input collection, validation, and submission boundary.
-- [`migration.md`](contracts/migration.md) — reversible persistence-schema change.
+- [`use-case-execution.md`](contracts/use-case-execution.md) — execution and effect coordination for one declared use case.
+- [`interactive-presentation.md`](contracts/interactive-presentation.md) — accessible presentation of state and user intent.
+- [`input-qualification.md`](contracts/input-qualification.md) — validation and safe normalization of untrusted input.
+- [`behavior-verification.md`](contracts/behavior-verification.md) — executable verification of observable approved behavior.
+- [`persistent-structure-evolution.md`](contracts/persistent-structure-evolution.md) — safe and reproducible evolution of durable data structures.
 
 Contracts define invariant behavior and verification expectations for an artifact category. A specification still owns feature-specific behavior; architecture owns placement and dependency boundaries.
 
