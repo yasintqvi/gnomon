@@ -2,376 +2,90 @@
 
 ## Purpose
 
-Define the execution process for the **Initialize Project Environment** intent.
-
-This workflow describes how the system should establish or complete a runnable project baseline from approved project knowledge before Specification-driven implementation begins.
-
-It covers repository inspection, environment verification, scaffolding, configuration, dependency locking, and baseline validation without introducing business behavior.
-
----
-
-## Intent
-
-Initialize or complete the project's environment, frameworks, dependencies, infrastructure, and baseline structure using only approved project knowledge.
-
----
+Establish the minimum verified project baseline required for approved development without implementing feature behavior or inventing project decisions.
 
 ## When to Use
 
-Use this workflow when:
-
-* The repository is empty or does not yet contain a runnable project baseline.
-* A required framework, runtime, dependency manifest, infrastructure service, or baseline subsystem has not been initialized.
-* The existing project environment is incomplete and prevents later implementation work.
-* The task is limited to environment setup, scaffolding, configuration, or baseline verification.
-
-Do not use this workflow when:
-
-* The required project baseline already exists and the requested work changes business behavior.
-* The task implements or modifies behavior defined by a Specification.
-* The task is limited to review, testing, refactoring, or architectural exploration.
-* The requested change belongs to an existing feature implementation rather than project initialization.
-
-Once the relevant baseline exists, subsequent behavior changes must follow the appropriate Workflow.
-
----
+Use Bootstrap when a repository is new, incomplete, inconsistent with its approved baseline, or missing required runtime, build, test, analysis, or foundational structure. Do not use it for feature implementation, speculative infrastructure, or changes already supported by a valid baseline.
 
 ## Inputs
 
-### User Input
+- Bootstrap objective, authorized scope, and explicit constraints
+- Existing repository, configuration, environment, and user-owned changes
+- `PROJECT.md`, `ARCHITECTURE.md`, `STACK.md`, and `CONVENTIONS.md`, as applicable
+- Relevant ADRs
+- Applicable Design Knowledge when bootstrapping user-interface foundations:
+  - `PRODUCT_EXPERIENCE.md` for required product shell or structural experience context
+  - `UI_FOUNDATION.md` for shared presentation foundations
+  - `INTERACTION_PATTERNS.md` for shared interaction infrastructure
+- Required verification mechanisms and environment constraints
 
-Authorization to initialize or complete the project baseline, including any explicit task-specific constraints.
-
-Examples may include:
-
-* Target environment
-* Operating system constraints
-* Local port restrictions
-* Containerization requirements
-* Restricted tools or providers
-* Scope limited to a specific subsystem
-
-### Project Context
-
-The current repository state, including existing files, configuration, dependency manifests, lockfiles, services, scaffolding, and user-owned changes.
-
-### Required Knowledge
-
-* `STACK.md`
-* `ARCHITECTURE.md`
-* `CONVENTIONS.md`
-* Applicable ADRs
-* Existing repository state
-
-`STACK.md` owns approved technologies, runtime requirements, versions, tools, and environment constraints.
-
-`ARCHITECTURE.md` and applicable ADRs own baseline structural and architectural decisions.
-
-`CONVENTIONS.md` owns applicable naming and organization rules.
-
----
+Design Knowledge governs only applicable UI foundations; Bootstrap must not infer feature behavior or create missing design decisions.
 
 ## Execution
 
 ### 1. Inspect
 
-**Purpose**
+Inventory the repository before changing it: files, configuration, runtime and dependency state, build and test tooling, existing conventions, partial setup, conflicts, and unrelated work to preserve.
 
-Determine the current repository and environment state before making changes.
+### 2. Verify the Baseline
 
-**Required Knowledge**
-
-* Existing repository structure
-* Existing manifests, lockfiles, configuration, and services
-* `STACK.md`
-
-**Expected Result**
-
-A baseline gap analysis identifying:
-
-* What already exists
-* Which baseline components are missing
-* Which existing files and user-owned changes must be preserved
-* Which parts of the environment are incomplete
-* Which detected issues are relevant to the authorized bootstrap scope
-
-Repository characteristics that are outside the authorized bootstrap scope or not owned by approved project knowledge must not be reported as bootstrap issues.
-
----
-
-### 2. Verify
-
-**Purpose**
-
-Confirm that the knowledge required to perform the authorized bootstrap scope is sufficiently defined.
-
-**Required Knowledge**
-
-* `STACK.md`
-* `ARCHITECTURE.md`
-* Applicable ADRs
-* User-provided constraints
-
-**Expected Result**
-
-A verified bootstrap plan containing:
-
-* Required runtimes
-* Required frameworks
-* Required infrastructure services
-* Required versions
-* Required baseline structural decisions
-* Blocking unresolved decisions
-* An **environment blocker** is a missing or incompatible local capability that prevents execution or validation of the authorized bootstrap scope but does not require a project decision.
-* Environment blockers
-* Deferrable unresolved decisions
-* Environment blockers must be reported separately from unresolved project decisions.
-* The smallest coherent bootstrap scope
-
-An unresolved decision is **blocking** only when the authorized bootstrap scope cannot proceed correctly without resolving it.
-
-An unresolved decision is **deferrable** when it affects future work but does not prevent completion of the current authorized bootstrap scope.
-
-The workflow must stop only before making a blocking technology or architectural decision.
-
----
+Compare the observed state with authoritative knowledge. Identify what is valid, missing, inconsistent, obsolete, or blocked, and define the smallest required bootstrap scope. Do not treat assumptions as requirements.
 
 ### 3. Scaffold
 
-**Purpose**
-
-Initialize the required frameworks, dependency manifests, and baseline project structure.
-
-**Required Knowledge**
-
-* Verified bootstrap plan
-* `STACK.md`
-* `ARCHITECTURE.md`
-* `CONVENTIONS.md`
-* Applicable ADRs
-
-**Expected Result**
-
-A baseline project structure that:
-
-* Uses only approved technologies
-* Respects architectural boundaries
-* Follows applicable project conventions
-* Preserves existing repository content
-* Contains no Specification-driven business behavior
-* Includes only what is necessary for the authorized bootstrap scope
-
----
+Create only the directories and foundational artifacts required by the approved Architecture, Stack, Conventions, and—when applicable—Design Knowledge. Reuse valid existing structure and avoid feature-specific code or speculative modules.
 
 ### 4. Configure
 
-**Purpose**
+Configure only approved runtime, dependency, build, test, static-analysis, formatting, localization, asset, and UI-foundation mechanisms required for the baseline. Use versions and tools defined by Stack or other owning knowledge; do not silently select missing project-wide choices.
 
-Configure the runtime environment and required baseline services.
+### 5. Lock Dependencies
 
-**Required Knowledge**
-
-* `STACK.md`
-* Environment constraints
-* Infrastructure-related ADRs
-* Existing configuration
-
-**Expected Result**
-
-A working baseline environment with the required configuration for applicable services, runtimes, and subsystems.
-
-Only approved and currently required services may be introduced.
-
-Infrastructure intended solely for hypothetical future needs must not be added.
-
----
-
-### 5. Lock
-
-**Purpose**
-
-Make dependency resolution reproducible.
-
-**Required Knowledge**
-
-* Dependency manifests
-* Approved package managers
-* `STACK.md` version policy
-
-**Expected Result**
-
-* Required lockfiles
-* Reproducible dependency installation
-* Recorded resolved versions
-* No avoidable floating versions where locking is supported
-
----
+Generate or update dependency manifests and lock state through the approved package manager when dependencies are in scope. Preserve reproducibility, avoid unrelated upgrades, and do not hand-edit generated lock data unless the tool and project explicitly support it.
 
 ### 6. Validate
 
-**Purpose**
-
-Confirm that the completed baseline is runnable, reproducible, and internally consistent.
-
-**Required Knowledge**
-
-* `STACK.md`
-* Build configuration
-* Testing configuration
-* Applicable baseline verification requirements
-
-**Expected Result**
-
-Evidence that, where applicable:
-
-* Dependencies install successfully.
-* Required services start successfully.
-* The project builds successfully.
-* The application or subsystem starts successfully.
-* Baseline checks pass.
-* Baseline tests pass.
-* No Specification-level behavior has been introduced.
-
----
-
-## Rules
-
-* Inspect only repository and environment characteristics required by the authorized bootstrap scope and approved project knowledge.
-* Do not treat optional development practices or tools, including version-control initialization, as bootstrap requirements unless approved project knowledge explicitly requires them.
-* Preserve existing user-owned files and changes.
-* Work only within the explicitly authorized bootstrap scope.
-* Use only technologies, tools, services, and versions approved by project knowledge.
-* Do not introduce commonly paired tools or dependencies unless they are approved and required.
-* Do not implement business rules, domain behavior, or Specification-driven functionality.
-* Do not introduce structural or architectural decisions not defined by `ARCHITECTURE.md` or an approved ADR.
-* Follow `CONVENTIONS.md` where it applies to baseline naming and organization.
-* Distinguish blocking decisions from deferrable decisions based on the authorized bootstrap scope.
-* Do not treat decisions required only by future or out-of-scope subsystems as bootstrap blockers.
-* Do not report unrelated repository conditions as bootstrap issues.
-* Record resolved dependency versions using the approved locking mechanism.
-* Prefer the smallest runnable and verifiable baseline.
-* Do not perform destructive operations without explicit authorization.
-* Do not change project knowledge merely to justify an incorrect bootstrap implementation.
-
----
+Run available installation, build, test, analysis, formatting, configuration, and minimal startup checks relevant to the baseline. Record commands and results, distinguish environment limitations from project failures, and report checks not run.
 
 ## Outputs
 
-### Primary Output
+- Minimal verified project baseline
+- Required structure, configuration, manifests, and lock state
+- Foundational test or analysis setup where approved
+- Validation evidence
+- Explicit blockers, assumptions, and remaining setup work
 
-A runnable and verifiable project baseline ready for later Specification-driven implementation.
+## Rules
 
-### Supporting Outputs
-
-* Required project scaffolding
-* Dependency manifests
-* Lockfiles
-* Environment configuration
-* Baseline service configuration
-* Build and test configuration
-* Verification evidence
-* Explicitly reported blockers, deferred decisions, and limitations
-
----
+- Remain within authorized bootstrap scope and preserve user-owned changes.
+- Do not treat optional practices or commonly paired tools as requirements unless approved knowledge makes them necessary.
+- Do not let decisions needed only by future or out-of-scope subsystems block the authorized baseline.
+- Prefer existing valid configuration over replacement.
+- Do not implement product features, business rules, speculative infrastructure, or future abstractions.
+- Do not invent architecture, design, conventions, technology, version, or project-policy decisions.
+- Keep generated artifacts consistent and reproducible.
+- Require explicit authorization for destructive replacement or removal.
+- Do not bypass or weaken validation to report success.
 
 ## Failure Handling
 
-### Missing Information
+### Missing or Conflicting Knowledge
 
-When required technology, version, provider, infrastructure, or architectural information is missing:
-
-1. Identify the missing decision.
-2. Determine which project document owns that decision.
-3. Determine whether the decision blocks the authorized bootstrap scope.
-4. Stop only the affected work when the decision is blocking.
-5. Continue unaffected bootstrap work when possible.
-6. Report deferrable decisions without resolving them.
-7. Request clarification only when the missing decision materially blocks progress.
-
-Do not select defaults on the project's behalf when they materially affect the authorized bootstrap scope.
----
+Identify the missing or conflicting decision and its owner, apply established ownership or precedence rules, continue unaffected setup, and stop only the affected work when the issue remains material. Do not select a project-wide default silently.
 
 ### Environment Blocker
 
-When the authorized bootstrap scope cannot be executed or validated because a required local capability is unavailable or incompatible:
+Record the command and failure, distinguish external restrictions from repository defects, try safe in-scope alternatives, and report the exact remaining prerequisite.
 
-1. Identify the missing or incompatible capability.
-2. Confirm that it is required by approved project knowledge and the authorized bootstrap scope.
-3. Report it separately from unresolved project decisions.
-4. Continue unaffected bootstrap work when possible.
-5. Do not modify project knowledge merely to match the current machine.
-6. Request installation, configuration, or environment correction only when required for progress.
+### Repository Conflict
 
----
+Preserve existing and user-owned work, prefer additive or compatible changes, and obtain authorization before destructive replacement.
 
-### Conflicting Information
+### Validation Failure
 
-When project knowledge conflicts:
-
-1. Identify the conflicting sources.
-2. Apply the project's knowledge ownership rules.
-3. Do not silently choose an interpretation.
-4. Stop only the affected work when the conflict cannot be resolved within the Workflow's authority.
-5. Continue unaffected work when possible.
-
----
-
-### Existing Repository Conflict
-
-When scaffolding or configuration would overwrite or invalidate existing content:
-
-1. Stop the affected operation.
-2. Identify the files or directories at risk.
-3. Preserve existing user-owned changes.
-4. Propose a non-destructive alternative when possible.
-5. Require explicit authorization before replacement, migration, or deletion.
-
----
-
-### Verification Failure
-
-When installation, build, startup, or baseline checks fail:
-
-1. Diagnose the failure.
-2. Correct bootstrap-caused issues within scope.
-3. Re-run the smallest relevant verification.
-4. Expand verification when broader impact is indicated.
-5. Report unresolved failures accurately.
-
-Do not bypass valid checks, weaken constraints, or modify approved project knowledge merely to produce a passing result.
-
----
+Diagnose and correct in-scope setup defects, rerun the narrowest failed check, and report unresolved failures without weakening the check.
 
 ## Completion Criteria
 
-The workflow is complete when:
-
-* The authorized baseline scope has been established.
-* Only approved technologies, versions, and structural decisions have been used.
-* Required dependency manifests and lockfiles exist.
-* Required baseline services and configuration are operational.
-* Applicable build, startup, and baseline checks pass.
-* Existing user-owned content has been preserved.
-* No Specification-driven behavior has been implemented.
-* Blocking issues have been resolved or explicitly reported.
-* Deferrable decisions have been recorded without unnecessarily stopping progress.
-* The resulting baseline is ready for the next appropriate Workflow.
-
----
-
-## Workflow Constraints
-
-* Bootstrap is limited to environment, scaffolding, configuration, dependency setup, and baseline verification.
-* Bootstrap must not implement behavior owned by a Specification.
-* Bootstrap may initialize only the project baseline or subsystem included in the authorized scope.
-* Existing and operational subsystems should not be re-scaffolded without explicit justification.
-* Prefer minimal, reversible, reproducible, and verifiable changes.
-* Avoid speculative tooling and infrastructure intended only for possible future use.
-
----
-
-## Notes
-
-Bootstrap may be used at project inception or later when a required baseline subsystem does not yet exist.
-
-Once the relevant baseline is operational, subsequent work must follow the Workflow corresponding to the new Intent.
+Bootstrap is complete when the approved baseline is runnable, required services, tools, and foundational structures are configured consistently with applicable project and Design Knowledge, dependency state is reproducible where relevant, validation evidence is recorded, unrelated work is preserved, and blocking or deferred limitations are explicit.

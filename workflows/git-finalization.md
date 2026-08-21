@@ -2,128 +2,68 @@
 
 ## Purpose
 
-Finalize a completed engineering work unit into a safe and traceable Git history and, when permitted, publish it through a pull request.
+Prepare completed, reviewed work for Git handoff while preserving repository integrity and keeping publication separately authorized.
 
-## Input
+This workflow packages work; it does not implement, review, verify, merge, or broaden the change.
 
-- Active work target
-- Current repository state
-- Current verification/review outcome
-- Git policy
+## Inputs and Preconditions
 
-## Preconditions
+- Completed authorized change and verification status
+- Repository state and branch policy
+- Requested commit, push, or pull-request scope
+- Explicit publication authorization when applicable
 
-The workflow must confirm:
+Before proceeding, confirm the repository is valid, the intended change is identifiable, unresolved conflicts are absent, and known failures or incomplete work are disclosed. Stop if unrelated changes cannot be safely separated.
 
-- the repository is a Git repository;
-- there are no unresolved merge conflicts;
-- the active work scope is identifiable;
-- required verification has passed or accepted limitations are recorded;
-- the current repository state does not contain ambiguous changes that cannot be safely attributed to the active work.
+## Execution
 
-## Workflow
+### 1. Inspect
 
-### 1. Inspect Repository
+Inspect status, diff, current branch, upstream and remote configuration, and recent history. Identify staged, unstaged, untracked, generated, sensitive, and unrelated artifacts.
 
-Inspect:
+### 2. Define Change Scope
 
-- current branch;
-- default branch;
-- working tree;
-- staged changes;
-- untracked files;
-- remotes;
-- commits relevant to the active work.
-
-### 2. Determine Change Scope
-
-Classify each changed file as:
-
-- In Scope
-- Supporting
-- Unrelated
-- Uncertain
-
-Do not automatically stage Unrelated or Uncertain changes.
+Classify changed artifacts as in-scope, supporting, unrelated, or uncertain. Stage only the first two categories; exclude sensitive files and preserve user-owned work. Never assume the whole working tree belongs to the task.
 
 ### 3. Prepare Branch
 
-If currently on the default or protected branch, create a dedicated branch derived from the active engineering intent.
+Use the current branch when appropriate or create an authorized, policy-compliant branch. If currently on a default or protected branch, create a dedicated branch. Do not rewrite published history, switch away from unprotected work, or alter unrelated branch state without authorization.
 
-### 4. Prepare Commit Plan
+### 4. Plan Commits
 
-Group changes by engineering intent.
-
-Prefer multiple coherent commits over one oversized commit when the work contains independently meaningful changes.
-
-Commit messages must describe intent rather than file operations.
+Choose the smallest coherent commit set. Keep inseparable code, tests, configuration, migrations, and documentation together; split independent concerns only when that improves traceability without breaking intermediate validity. Derive clear messages from actual changes and repository conventions.
 
 ### 5. Stage and Validate
 
-Stage only the files belonging to the current commit.
-
-Inspect the staged diff before committing.
-
-Never use broad staging when unrelated changes are present.
+Stage explicit intended paths, inspect the staged diff, and confirm it contains no secrets, temporary artifacts, accidental generated output, unrelated changes, or unresolved conflicts. Re-run relevant checks if staging or finalization changed artifacts.
 
 ### 6. Commit
 
-Create local commits only when:
-
-- staged scope is coherent;
-- no unrelated changes are included;
-- known required checks are satisfied.
+Commit only the validated staged scope. Report any local hooks or checks that fail; do not bypass them without explicit authorization.
 
 ### 7. Publication Gate
 
-Apply the configured Git mode.
+Treat push and pull-request creation as external publication. Proceed only when explicitly requested or already authorized; otherwise stop after local commit preparation and report the next command or action.
 
-For managed-with-approval mode:
+### 8. Push and Pull Request
 
-- local commits may be created automatically;
-- stop before the first push;
-- present branch, commits, and PR plan;
-- require explicit user approval.
+When authorized, push only the intended feature branch—never directly to a protected default branch—and do not force-push unless explicitly authorized and safe. Create or update one pull request for the coherent work unit, covering its purpose, governing specification or decision, important changes, verification evidence, resolved findings, and known limitations. Do not merge it.
 
-### 8. Push
+### 9. Report
 
-Push only the prepared feature branch.
+Report the branch, commit hashes and messages, included scope, files intentionally left untouched, verification status, publication state, pull-request reference when created, and remaining user actions or blockers.
 
-Never push directly to a protected default branch.
+## Rules
 
-Never force-push unless explicitly authorized.
+- Do not include unrelated, sensitive, temporary, or environment-specific files.
+- Do not use broad staging when unrelated or uncertain changes exist.
+- Do not discard or overwrite user-owned work.
+- Do not commit unresolved conflicts or present known failing work as complete.
+- Do not weaken or bypass hooks and checks without explicit authorization.
+- Do not push, force-push, open or update a pull request, or otherwise publish without authorization.
+- Do not rewrite published history or merge a pull request unless explicitly authorized by a separate scope.
+- Never use finalization to conceal incomplete implementation, verification gaps, or known failures.
 
-### 9. Pull Request
+## Completion Criteria
 
-Create or update one PR for the coherent work unit.
-
-The PR must include:
-
-- purpose;
-- implemented specification or decision;
-- important changes;
-- verification evidence;
-- resolved findings;
-- known limitations or deferred work.
-
-### 10. Report
-
-Report:
-
-- branch name;
-- commits created;
-- files intentionally left untouched;
-- push status;
-- PR status;
-- remaining Git concerns.
-
-## Prohibited Behavior
-
-The workflow must not:
-
-- blindly run `git add .`;
-- include unrelated changes;
-- commit unresolved merge conflicts;
-- publish known failing work as complete;
-- rewrite published history without explicit authorization;
-- merge its own PR.
+Finalization is complete at the authorized boundary: either a validated local commit is prepared, or the authorized publication and pull-request steps are complete. The report must make that boundary and every remaining action explicit.

@@ -2,300 +2,71 @@
 
 ## Purpose
 
-Define the execution process for the **Review** intent.
+Evaluate an existing artifact within an authorized scope using approved project knowledge, reusable engineering questions, available verification evidence, and engineering judgment.
 
-Review evaluates an artifact using reusable engineering questions together with approved project knowledge and available verification evidence.
-
-The objective is to identify engineering defects, risks, knowledge gaps, and other concerns that require engineering reasoning and cannot be established through objective verification alone.
-
-Review evaluates existing work.
-
-It does not redefine project knowledge, modify implementation, or approve resolutions.
-
----
-
-## Intent
-
-Evaluate whether the current implementation and available evaluation sufficiently address relevant engineering scenarios within the authorized review scope.
-
----
+Review identifies defects, risks, and knowledge gaps. It does not modify implementation or project knowledge, approve decisions, or resolve findings.
 
 ## When to Use
 
-Use this workflow when:
-
-* An implementation or other project artifact requires engineering evaluation.
-* Objective verification alone is insufficient to evaluate engineering quality or risk.
-* Potential defects, risks, or missing project knowledge must be identified.
-* Verification Evidence requires engineering interpretation.
-
-Do not use this workflow when:
-
-* The task is limited to objective compliance verification.
-* The task is to implement or modify the target.
-* The task is to define new product, business, architectural, or project-policy knowledge.
-* A previously identified finding is being resolved.
-
----
+Use Review when objective verification alone cannot assess engineering quality, risk, or uncertainty. Use Verification for objective compliance, Implementation to change the target, and the owning knowledge process to make new decisions.
 
 ## Inputs
 
-### User Input
+- Review target, authorized scope, and explicit constraints
+- Repository, related artifacts, implementation, and established patterns
+- Relevant Specifications and Domain knowledge
+- `PROJECT.md`, `ARCHITECTURE.md`, `STACK.md`, and `CONVENTIONS.md`, as applicable
+- Applicable ADRs and Artifact Contracts
+- Applicable Design Knowledge for user-facing targets:
+  - `PRODUCT_EXPERIENCE.md`
+  - `UI_FOUNDATION.md`
+  - `INTERACTION_PATTERNS.md`
+- Applicable engineering review questions
+- Available Verification Evidence
 
-* Review target
-* Review scope
-* Explicit constraints
-
-### Project Context
-
-* Repository
-* Existing implementation
-* Related artifacts
-* Existing project patterns
-
-### Required Knowledge
-
-As applicable to the review target:
-
-* Relevant Specifications
-* Relevant Domain knowledge
-* `PROJECT.md`
-* `ARCHITECTURE.md`
-* `STACK.md`
-* `CONVENTIONS.md`
-* Applicable ADRs
-* Applicable Artifact Contracts
-
-### Evaluation Assets
-
-* Applicable engineering review questions
-
-### Optional Inputs
-
-* Verification Evidence
-
-When Verification Evidence exists, Review should consume it rather than independently repeating equivalent verification work.
-
-When relevant Verification Evidence is unavailable, Review must explicitly report the resulting reduction in confidence where it materially affects a conclusion.
-
----
+Reuse existing Verification Evidence instead of repeating equivalent checks. When relevant evidence is absent, report any material reduction in confidence; absence alone is not a defect.
 
 ## Execution
 
-### 1. Understand
+### 1. Establish Scope
 
-#### Purpose
+Identify the target, scope, governing knowledge, applicable contracts and review questions, available evidence, and relevant implementation relationships. Exclude questions and knowledge outside scope.
 
-Determine the review target, authorized scope, governing project knowledge, and available evidence.
+### 2. Derive Questions
 
-#### Expected Result
-
-Identify:
-
-* Review target
-* Authorized review scope
-* Applicable project knowledge
-* Applicable Artifact Contracts
-* Applicable engineering review questions
-* Available Verification Evidence
-* Relevant existing implementation and project patterns
-
-Questions and knowledge outside the authorized scope must not affect the review result.
-
----
-
-### 2. Derive Review Questions
-
-#### Purpose
-
-Determine which engineering scenarios require evaluation for the target.
-
-#### Sources
-
-Review questions may originate from:
-
-* Reusable engineering review questions
-* Relevant Specifications
-* Project-level requirements
-* Domain knowledge
-* Architectural boundaries
-* Stack constraints
-* Project conventions
-* Applicable ADRs
-* Applicable Artifact Contracts
-* Existing implementation relationships
-* Available Verification Evidence
-
-#### Expected Result
-
-A bounded set of engineering questions relevant to the authorized review scope.
-
-Review must not invent new requirements while deriving questions.
-
-Questions derived from project knowledge evaluate the engineering consequences of existing approved knowledge; they do not create new project rules.
-
----
+Create a bounded question set from reusable review questions, approved project and Design Knowledge, contracts, implementation relationships, and Verification Evidence. Questions may examine engineering consequences of approved knowledge but must not create requirements.
 
 ### 3. Evaluate
 
-#### Purpose
+Evaluate each applicable question using technical evidence and engineering reasoning. Explicitly distinguish observed facts, approved requirements, reasoning, preferences, and uncertainty.
 
-Evaluate every applicable engineering question using available evidence and engineering reasoning.
+### 4. Classify Outcomes
 
-Evaluation may use:
+Assign one outcome to each applicable question:
 
-* Review target
-* Existing implementation
-* Approved project knowledge
-* Existing project patterns
-* Verification Evidence
-* Relevant technical evidence
+- `PASS` — no material concern is identified.
+- `DEFECT` — the artifact demonstrably violates approved behavior, project knowledge, or a required engineering invariant.
+- `RISK` — a credible material failure mode or engineering weakness exists despite possible compliance with known requirements; style preference alone is insufficient.
+- `KNOWLEDGE GAP` — missing, ambiguous, or conflicting authoritative knowledge prevents safe resolution.
+- `NOT APPLICABLE` — the question does not apply.
 
-Review must distinguish:
+Provide supporting reasoning for every non-trivial outcome.
 
-* Observed facts
-* Existing project requirements
-* Engineering reasoning
-* Uncertainty
+### 5. Produce Actionable Findings
 
-Review must not treat an engineering preference as an approved project requirement.
+Only `DEFECT`, `RISK`, and `KNOWLEDGE GAP` create actionable findings. Consolidate observations with one underlying issue unless they require independent resolution.
 
----
+Each finding receives a stable report-local ID (`F-001`, `F-002`, ...), evidence, reasoning, impact, Resolution Owner, Decision Required status, and recommended next workflow.
 
-### 4. Produce Findings
+### 6. Determine Resolution Path
 
-Each applicable review question receives one of the following outcomes:
+Identify the artifact or implementation area that owns resolution, such as Implementation, Specification, Domain, Project, Architecture, ADR, Stack, Conventions, Design Knowledge, Contract, Workflow, Evaluation, or Documentation.
 
-* `PASS`
-* `DEFECT`
-* `RISK`
-* `KNOWLEDGE GAP`
-* `NOT APPLICABLE`
+Set `Decision Required: Yes` when resolution requires new or changed authoritative knowledge. Review may describe the required resolution category but must not design or approve the solution.
 
-#### PASS
-
-Available evidence and engineering analysis identify no material concern for the evaluated scenario.
-
-#### DEFECT
-
-The artifact demonstrably fails to satisfy approved behavior, project knowledge, or a required engineering invariant.
-
-#### RISK
-
-The current artifact may satisfy known requirements but exposes a credible engineering failure mode, maintainability concern, operational concern, security concern, usability concern, or other material engineering weakness.
-
-A Risk must not be based solely on stylistic preference.
-
-#### KNOWLEDGE GAP
-
-The scenario cannot be resolved safely because required product, business, architectural, project-policy, contract, or other authoritative knowledge is missing or materially ambiguous.
-
-#### NOT APPLICABLE
-
-The engineering scenario does not apply to the review target or authorized scope.
-
-Supporting reasoning is mandatory for every non-trivial outcome.
-
----
-
-### 5. Identify Actionable Findings
-
-Only `DEFECT`, `RISK`, and `KNOWLEDGE GAP` outcomes produce actionable findings.
-
-Every actionable finding must identify:
-
-* Finding ID
-* Classification
-* Summary
-* Evidence
-* Engineering reasoning
-* Impact
-* Resolution Owner
-* Decision Required status
-* Recommended next workflow
-
-Review may explain the nature of the required resolution but must not design or implement the solution.
-
----
-
-### 6. Determine Resolution
-
-#### Purpose
-
-Determine the appropriate resolution path for each actionable finding.
-
-Review does not resolve findings.
-
-It identifies which project artifact or implementation area owns the missing or incorrect knowledge.
-
-#### Possible Resolution Owners
-
-Depending on the finding, ownership may belong to:
-
-* Implementation
-* Specification
-* Domain
-* Project
-* Architecture
-* ADR
-* Stack
-* Conventions
-* Contract
-* Workflow
-* Evaluation
-* Documentation
-
-#### Decision Required
-
-A finding must be marked **Decision Required** when resolution requires new or changed authoritative project knowledge rather than correction of implementation against existing knowledge.
-
-Review must not invent, approve, or silently select that decision.
-
-#### Expected Result
-
-Every actionable finding identifies:
-
-* Finding Classification
-* Resolution Owner
-* Decision Required: Yes or No
-* Recommended next workflow
-
----
-
-## Finding Identity
-
-Every actionable finding must receive a unique identifier within the review report.
-
-Identifiers use:
-
-`F-001`, `F-002`, `F-003`, ...
-
-The identifier must remain stable when the same finding is referenced for approval or resolution.
-
-Related observations that share the same underlying issue should remain one finding unless they require independent resolution.
-
----
-
-## Outputs
-
-### Primary Output
+## Output
 
 **Engineering Review Report**
-
-An evidence-based evaluation of the applicable engineering scenarios.
-
-### Supporting Outputs
-
-As applicable:
-
-* Classified Findings
-* Resolution Owner for every actionable finding
-* Decision Required indicators
-* Risk Assessment
-* Compliance Summary
-* Remaining Uncertainties
-
-### Finding Model
 
 ```text
 Finding ID:
@@ -309,118 +80,33 @@ Decision Required: Yes | No
 Recommended Next Workflow:
 ```
 
----
+Also report scope, passes where useful, remaining uncertainty, and the effect of missing evidence.
 
 ## Rules
 
-* Review must remain within the authorized scope.
-* Review must not redefine project knowledge.
-* Review must distinguish observed facts from engineering reasoning.
-* Review must distinguish approved requirements from engineering preferences.
-* Review must report material uncertainty explicitly.
-* Review must not silently assume undefined behavior.
-* Review must not modify implementation.
-* Review must not modify project knowledge.
-* Review must not resolve findings directly.
-* Review must not approve project decisions.
-* Review must not propose detailed implementation solutions.
-* Review may identify that new or changed project knowledge is required.
-* When a finding requires a project decision, it must be classified as `KNOWLEDGE GAP`.
-* Every actionable finding must identify its Resolution Owner.
-* Every actionable finding must identify whether a project decision is required.
-* Review must not repeat Verification Evidence unless required to support engineering reasoning or a finding.
-* Existing Verification Evidence should be reused where applicable.
-* Lack of Verification Evidence must not automatically produce a defect.
-* Engineering preferences alone must not produce defects.
-* Review recommendations are not approved actions and require explicit authorization before resolution.
-
----
+- Remain within scope and trace conclusions to the artifact, approved knowledge, and evidence.
+- Do not redefine knowledge, modify implementation, resolve findings, approve decisions, or provide detailed implementation solutions.
+- Do not treat preference as requirement or lack of verification as defect.
+- Report material uncertainty and never silently assume undefined behavior.
+- Classify a material missing-decision issue as `KNOWLEDGE GAP` and identify its owner.
+- Recommendations require authorization before resolution.
 
 ## Failure Handling
 
 ### Missing Verification Evidence
 
-When relevant Verification Evidence is unavailable:
+Continue where evidence is sufficient, identify confidence limits, and recommend Verification when objective evidence could resolve them.
 
-1. Continue review where sufficient evidence exists.
-2. Identify conclusions whose confidence is materially reduced.
-3. Do not invent verification results.
-4. Do not classify absence of verification alone as a defect.
+### Missing or Conflicting Knowledge
 
----
-
-### Missing Project Knowledge
-
-When engineering evaluation requires authoritative knowledge that is missing or materially ambiguous:
-
-1. Identify the missing knowledge.
-2. Do not invent the expected rule.
-3. Produce a `KNOWLEDGE GAP` when the gap materially affects the reviewed scenario.
-4. Identify the appropriate Resolution Owner.
-5. Mark `Decision Required` when resolution requires an explicit project decision.
-
----
-
-### Conflicting Project Knowledge
-
-When applicable approved sources conflict:
-
-1. Identify the conflicting sources.
-2. Apply established project knowledge ownership or precedence rules when available.
-3. If the conflict remains material, produce a `KNOWLEDGE GAP`.
-4. Do not silently choose one interpretation.
-
----
+Identify the owning or conflicting sources and apply established ownership or precedence rules. If the issue remains material, produce a `KNOWLEDGE GAP`, name the Resolution Owner, and mark whether a decision is required.
 
 ### Insufficient Technical Evidence
 
-When a question cannot be evaluated responsibly from available technical evidence:
-
-1. Identify the missing evidence.
-2. Report the resulting uncertainty.
-3. Do not fabricate a conclusion.
-4. Recommend Verification when objective evidence can resolve the uncertainty.
-
----
+Identify missing evidence, report uncertainty, avoid fabricated conclusions, and recommend Verification when appropriate.
 
 ## Completion Criteria
 
-Review completes when:
+Review is complete when all applicable questions have been evaluated; Verification Evidence has been reused where relevant; actionable findings have stable IDs, owners, decision status, and next workflows; material uncertainty is reported; and neither implementation nor project knowledge has been changed.
 
-* The review target and authorized scope are defined.
-* Applicable project knowledge has been identified.
-* Applicable engineering questions have been evaluated.
-* Available Verification Evidence has been consumed where relevant.
-* Every actionable finding has a stable identifier.
-* Every actionable finding has a Resolution Owner.
-* Every actionable finding identifies whether a project decision is required.
-* Material uncertainty has been reported.
-* No implementation or project knowledge has been modified.
-
----
-
-## Workflow Constraints
-
-* Review evaluates; it does not implement.
-* Review reasons about engineering quality; it does not create requirements.
-* Review may consume Verification Evidence but must not silently replace Verification.
-* Review must remain traceable to the reviewed artifact, approved project knowledge, and available evidence.
-* Detailed resolution work occurs only after the relevant finding has been explicitly authorized.
-
----
-
-## Notes
-
-Verification asks:
-
-> Does objective evidence demonstrate compliance with approved obligations?
-
-Review asks:
-
-> Given the approved project knowledge and available evidence, does this implementation expose a material engineering defect, risk, or unresolved knowledge gap?
-
-Resolution asks:
-
-> What approved change should be made to address that finding?
-
-These responsibilities must remain separate.
+Verification asks whether objective evidence proves compliance. Review asks whether the artifact exposes a material defect, risk, or knowledge gap. Resolution begins only after authorization and remains a separate responsibility.
