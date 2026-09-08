@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/gnomon.png" alt="Gnomon logo" width="120" />
+  <img src="assets/gnomon.png" alt="Gnomon logo" width="220" />
 </p>
 
 # AI Software Engineering System
