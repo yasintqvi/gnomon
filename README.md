@@ -18,26 +18,23 @@ This repository is the system itself: it contains no application runtime, packag
 - Prefer the smallest coherent change and preserve unrelated work.
 - Add abstractions only when real usage demonstrates a need.
 
-## How the Documents Fit Together
+## Gnomon Lifecycle
 
-```text
-User request
-    |
-    v
-Choose an intent and workflow
-    |
-    v
-Load applicable context, specifications, ADRs, and contracts
-    |
-    v
-Execute the workflow within the authorized scope
-    |
-    v
-Verify objectively ---> Review with engineering judgment
-    |
-    v
-Optionally finalize the approved change in Git
+Gnomon organizes engineering work around this high-level lifecycle, with each task entering the stages relevant to its intent.
+
+```mermaid
+flowchart TD
+    A[User Intent] --> B[Relevant Knowledge & Workflow]
+    B --> C[Engineering Execution]
+    C --> D[Verification]
+    D -- Iteration needed --> B
+    D -- Review needed --> E[Review]
+    D -- Complete --> F[Git Finalization<br/>when authorized]
+    E -- Iteration needed --> B
+    E -- Complete --> F
 ```
+
+A workflow determines which knowledge applies and carries out the work. Verification then objectively checks compliance; Review applies engineering judgment on top of that, but only when the task calls for it — not every task requires a full Review. Either stage can send work back to the relevant knowledge and workflow for resolution or iteration rather than inventing an answer on the spot. Git Finalization follows only once the change is approved and explicitly authorized. The detailed steps, failure handling, and ownership rules behind each stage live in [`workflows/`](workflows) and the documents they reference.
 
 Project knowledge is divided by responsibility:
 
@@ -165,6 +162,37 @@ For an approved feature request:
 7. Run `workflows/review.md` if risks, quality, or incomplete knowledge require engineering evaluation.
 8. Resolve findings through their identified owner and repeat the applicable workflow.
 9. When authorized, use `workflows/git-finalization.md` to prepare the Git handoff.
+
+## Prompt Guide
+
+Gnomon's workflows already define which knowledge to load, which steps to follow, and how to handle missing information. A prompt should express engineering intent, scope, and constraints — not restate that procedure.
+
+A good prompt normally includes:
+
+- **Intent** — what kind of change this is (implement, fix, verify, review, finalize, ...).
+- **Target/scope** — the specification, use case, artifact, or area affected.
+- **Requested change or outcome** — what should be true when the work is done.
+- **Known constraints** — anything that limits the change (must not touch X, must preserve Y).
+- **Explicit authorization** — required for destructive actions and for any Git push or pull request.
+
+A prompt normally does **not** need to:
+
+- Manually orchestrate which internal knowledge the agent loads — the selected workflow's Inputs section already determines that. Referencing the Specification, ADR, use case, or artifact that defines the task's scope (for example, "Implement SPEC-014") is expected, not something to avoid.
+- Reproduce the workflow's steps — `workflows/` already owns the procedure.
+- Repeat contract or convention rules — `contracts/`, `context/CONVENTIONS.md`, and the evaluation criteria already own them.
+- Invent missing requirements — an approved [`Specification`](specifications/SPEC-001-use-case-name.md) or [`ADR`](decisions/ADR-001-decision-title.md) does, and a gap should be reported rather than guessed.
+
+### Examples by situation
+
+| Situation | Example prompt |
+| --- | --- |
+| Implementing an approved feature | "Implement SPEC-014 (bulk invite). Stay within its acceptance criteria and flag anything it leaves undefined." |
+| Changing existing behavior | "Update the export use case to also support CSV per SPEC-009's revised acceptance criteria. Preserve the existing JSON export behavior." |
+| Fixing a bug | "Users report a duplicate charge when retrying a failed checkout. Reproduce and fix it within the checkout use case; don't touch unrelated payment logic." |
+| Verifying an implementation | "Run verification on the checkout implementation against SPEC-009 and the use-case-execution contract. Report PASS/FAIL/UNVERIFIABLE per obligation." |
+| Reviewing engineering quality | "Review the checkout implementation for risk and completeness. Verification evidence already exists — reuse it rather than repeating it." |
+| Incomplete or ambiguous knowledge | "SPEC-009 doesn't define behavior for a canceled-then-retried order. Don't guess — report what's missing and who owns the decision." |
+| Finalizing completed work in Git | "The checkout fix is verified and reviewed. Commit it on a new branch. Do not push." |
 
 ## Extending the System
 
