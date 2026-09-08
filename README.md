@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/gnomon.png" alt="Gnomon logo" width="120" />
+</p>
+
 # AI Software Engineering System
 
 A repository of Markdown templates for running AI-assisted software engineering as an explicit, document-driven process. It separates durable project knowledge, feature requirements, artifact behavior, architectural decisions, execution workflows, and evaluation criteria so an AI agent can load only the sources relevant to a task.
@@ -57,7 +61,10 @@ Do not duplicate a rule across documents. For example, feature behavior belongs 
 │   ├── DOMAIN.md
 │   ├── ARCHITECTURE.md
 │   ├── STACK.md
-│   └── CONVENTIONS.md
+│   ├── CONVENTIONS.md
+│   ├── PRODUCT_EXPERIENCE.md
+│   ├── UI_FOUNDATION.md
+│   └── INTERACTION_PATTERNS.md
 ├── specifications/
 │   └── SPEC-001-use-case-name.md
 ├── contracts/
@@ -67,7 +74,7 @@ Do not duplicate a rule across documents. For example, feature behavior belongs 
 │   ├── persistent-structure-evolution.md
 │   └── use-case-execution.md
 ├── decisions/
-│   └── ADR-001-decison-title.md
+│   └── ADR-001-decision-title.md
 ├── workflows/
 │   ├── bootstrap.md
 │   ├── implementation.md
@@ -82,7 +89,7 @@ Do not duplicate a rule across documents. For example, feature behavior belongs 
 └── README.md
 ```
 
-The files under `context/`, along with the sample specification and ADR, are intentionally unfilled templates. Bracketed text such as `[Project name]` marks content to replace for a real project. The contracts, workflows, and evaluation assets are reusable baselines that may be adapted when a project's established rules require it.
+The files under `context/`, along with the sample specification and ADR, are intentionally unfilled templates. Bracketed text such as `[Project name]` marks content to replace for a real project. The contracts, workflows, and evaluation assets are reusable baselines that may be adapted when a project's established rules require it. `PRODUCT_EXPERIENCE.md`, `UI_FOUNDATION.md`, and `INTERACTION_PATTERNS.md` are also reusable baselines rather than templates: unlike the other `context/` files, they are already fully authored and, together, form the Design Knowledge referenced by the workflows.
 
 ## Document Catalog
 
@@ -93,11 +100,16 @@ The files under `context/`, along with the sample specification and ADR, are int
 - [`ARCHITECTURE.md`](context/ARCHITECTURE.md) — components, dependencies, interactions, placement rules, structural patterns, and constraints.
 - [`STACK.md`](context/STACK.md) — languages, runtimes, frameworks, libraries, infrastructure, tools, and version policy.
 - [`CONVENTIONS.md`](context/CONVENTIONS.md) — naming, organization, formatting, documentation, testing, error-handling, and consistency rules.
+- [`PRODUCT_EXPERIENCE.md`](context/PRODUCT_EXPERIENCE.md) — product information architecture, navigation, cross-feature journeys, and discoverability that make independently implemented features feel like one product.
+- [`UI_FOUNDATION.md`](context/UI_FOUNDATION.md) — shared visual and presentation foundation: design tokens, color, typography, layout, responsive containment, and theming.
+- [`INTERACTION_PATTERNS.md`](context/INTERACTION_PATTERNS.md) — shared interaction behavior such as feedback, confirmations, loading, forms, and collection interaction, so independently implemented features behave consistently.
+
+These three are collectively referred to as Design Knowledge by the workflows below.
 
 ### Requirements and decisions
 
 - [`SPEC-001-use-case-name.md`](specifications/SPEC-001-use-case-name.md) — template for one bounded use case, including flows and acceptance criteria. Copy it for additional specifications and assign each one a unique ID.
-- [`ADR-001-decison-title.md`](decisions/ADR-001-decison-title.md) — template for an architectural decision record, including alternatives, consequences, constraints, and impact. Copy it for additional decisions and assign each one a unique ID.
+- [`ADR-001-decision-title.md`](decisions/ADR-001-decision-title.md) — template for an architectural decision record, including alternatives, consequences, constraints, and impact. Copy it for additional decisions and assign each one a unique ID.
 
 ### Artifact contracts
 
