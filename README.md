@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/gnomon.png" alt="Gnomon logo" width="220" />
+  <img src="assets/gnomon.png" alt="Gnomon logo" width="190" />
 </p>
 
-# AI Software Engineering System
+<h1 align="center">AI Software Engineering System</h1>
 
 A repository of Markdown templates for running AI-assisted software engineering as an explicit, document-driven process. It separates durable project knowledge, feature requirements, artifact behavior, architectural decisions, execution workflows, and evaluation criteria so an AI agent can load only the sources relevant to a task.
 
