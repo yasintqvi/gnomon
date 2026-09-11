@@ -34,7 +34,9 @@ flowchart TD
     E -- Complete --> F
 ```
 
-A workflow determines which knowledge applies and carries out the work. Verification then objectively checks compliance; Review applies engineering judgment on top of that, but only when the task calls for it — not every task requires a full Review. Either stage can send work back to the relevant knowledge and workflow for resolution or iteration rather than inventing an answer on the spot. Git Finalization follows only once the change is approved and explicitly authorized. The detailed steps, failure handling, and ownership rules behind each stage live in [`workflows/`](workflows) and the documents they reference.
+A workflow determines which knowledge applies and carries out the work. Verification then objectively checks compliance; Review applies engineering judgment on top of that, but only when the task calls for it — not every task requires a full Review. Either stage can send work back to the relevant knowledge and workflow for resolution or iteration rather than inventing an answer on the spot. When a workflow stops on a material knowledge gap, it stops only the affected work, presents the missing decision, and waits; once a human resolves it, [`workflows/knowledge-resolution.md`](workflows/knowledge-resolution.md) determines the decision's primary, secondary, and additional-decision effects, updates every authoritative document whose owned knowledge actually changed, creates an ADR only where independently justified, checks the affected knowledge for contradictions, and only then resumes the paused work — a human answer never maps mechanically to one document or automatically produces an ADR. Git Finalization follows only once the change is approved and explicitly authorized. The detailed steps, failure handling, and ownership rules behind each stage live in [`workflows/`](workflows) and the documents they reference.
+
+For a new project, `User Intent` can arrive before enough approved knowledge exists to select Bootstrap as the relevant workflow: [`workflows/initial-knowledge-establishment.md`](workflows/initial-knowledge-establishment.md) turns that initial intent, together with whatever the repository already contains, into the minimum approved project knowledge Bootstrap needs — asking the human only about unknowns material to that baseline, recording each decision in its existing owner, and creating an ADR only where independently justified. It completes only once the human explicitly approves the recorded knowledge; that approval covers only what was recorded, and any remaining non-blocking unknowns stay open for later workflows. Bootstrap then becomes the applicable next stage.
 
 Project knowledge is divided by responsibility:
 
@@ -73,11 +75,13 @@ Do not duplicate a rule across documents. For example, feature behavior belongs 
 ├── decisions/
 │   └── ADR-001-decision-title.md
 ├── workflows/
+│   ├── initial-knowledge-establishment.md
 │   ├── bootstrap.md
 │   ├── implementation.md
 │   ├── testing.md
 │   ├── verification.md
 │   ├── review.md
+│   ├── knowledge-resolution.md
 │   └── git-finalization.md
 ├── evaluations/
 │   ├── VERIFICATION_CRITERIA.md
@@ -122,11 +126,13 @@ Contracts define invariant behavior and verification expectations for an artifac
 
 | Intent | Workflow | Result |
 | --- | --- | --- |
+| Establish minimum approved project knowledge for a new project | [`initial-knowledge-establishment.md`](workflows/initial-knowledge-establishment.md) | Approved initial project knowledge recorded in its authoritative owners, non-blocking unknowns listed separately, human approval recorded |
 | Establish a missing project baseline | [`bootstrap.md`](workflows/bootstrap.md) | Minimal verified structure and configuration required for later work |
 | Build or change approved behavior | [`implementation.md`](workflows/implementation.md) | Coherent implementation plus verification evidence |
 | Design, add, or execute behavioral tests | [`testing.md`](workflows/testing.md) | Test implementation and reproducible test results |
 | Check objective compliance | [`verification.md`](workflows/verification.md) | Per-obligation `PASS`, `FAIL`, or `UNVERIFIABLE` evidence |
 | Evaluate engineering quality and risk | [`review.md`](workflows/review.md) | `PASS`, `DEFECT`, `RISK`, `KNOWLEDGE GAP`, or `NOT APPLICABLE` findings |
+| Apply a human decision resolving a reported knowledge gap | [`knowledge-resolution.md`](workflows/knowledge-resolution.md) | Authoritative knowledge updated, ADRs created only where independently justified, consistency checked, paused workflow resumed |
 | Prepare and optionally publish Git work | [`git-finalization.md`](workflows/git-finalization.md) | Scoped branch/commit preparation and, only when authorized, push or pull request |
 
 Verification and review are deliberately separate. Verification asks whether traceable obligations are objectively satisfied. Review consumes available evidence and applies engineering reasoning; it identifies findings and their owner but does not silently resolve missing product or architectural decisions.
@@ -139,13 +145,14 @@ Verification and review are deliberately separate. Verification asks whether tra
 ## Getting Started
 
 1. Copy this repository, or copy its document directories into the target repository.
-2. Replace the placeholders in `context/`, starting with `PROJECT.md` and `DOMAIN.md`, then document the architecture, stack, and conventions that actually exist.
-3. Copy and rename the specification template for each approved use case. Keep requirements and acceptance criteria explicit.
-4. Copy and rename the ADR template whenever a significant decision needs a durable record.
-5. Select the workflow that matches the user's intent. Follow its required-knowledge section rather than loading every document automatically.
-6. Apply only the contracts relevant to the artifacts being created or changed.
-7. Use verification criteria to produce objective evidence, then use review questions when engineering judgment is required.
-8. Use Git finalization only after the change is complete, and treat pushing or opening a pull request as a separate authorization gate.
+2. Run [`workflows/initial-knowledge-establishment.md`](workflows/initial-knowledge-establishment.md) to turn the initial intent and anything already in the repository into the minimum approved `PROJECT.md`, `DOMAIN.md` (only when material), `ARCHITECTURE.md`, `STACK.md`, and `CONVENTIONS.md` knowledge Bootstrap needs. Ask the human only about unknowns material to that baseline, and stop once it is approved rather than completing every template section.
+3. Run [`workflows/bootstrap.md`](workflows/bootstrap.md) to establish the minimum verified project baseline from that approved knowledge.
+4. Copy and rename the specification template for each approved use case. Keep requirements and acceptance criteria explicit.
+5. Copy and rename the ADR template whenever a significant decision needs a durable record.
+6. Select the workflow that matches the user's intent. Follow its required-knowledge section rather than loading every document automatically.
+7. Apply only the contracts relevant to the artifacts being created or changed.
+8. Use verification criteria to produce objective evidence, then use review questions when engineering judgment is required.
+9. Use Git finalization only after the change is complete, and treat pushing or opening a pull request as a separate authorization gate.
 
 There is nothing to install or execute in this repository. Its Markdown files can be used directly by people, coding agents, or repository-level agent instructions.
 
@@ -181,17 +188,21 @@ A prompt normally does **not** need to:
 - Reproduce the workflow's steps — `workflows/` already owns the procedure.
 - Repeat contract or convention rules — `contracts/`, `context/CONVENTIONS.md`, and the evaluation criteria already own them.
 - Invent missing requirements — an approved [`Specification`](specifications/SPEC-001-use-case-name.md) or [`ADR`](decisions/ADR-001-decision-title.md) does, and a gap should be reported rather than guessed.
+- Name which workflow resolves a reported knowledge gap — once a gap has been reported, stating the decision is enough; the agent recognizes the context, applies [`workflows/knowledge-resolution.md`](workflows/knowledge-resolution.md), and resumes the paused work.
+- Pre-answer every `context/` template section before starting a new project — [`workflows/initial-knowledge-establishment.md`](workflows/initial-knowledge-establishment.md) identifies only what is material to reach Bootstrap and asks about that.
 
 ### Examples by situation
 
 | Situation | Example prompt |
 | --- | --- |
+| Starting a brand-new project | "I want to build a workplace space-reservation system." |
 | Implementing an approved feature | "Implement SPEC-014 (bulk invite). Stay within its acceptance criteria and flag anything it leaves undefined." |
 | Changing existing behavior | "Update the export use case to also support CSV per SPEC-009's revised acceptance criteria. Preserve the existing JSON export behavior." |
 | Fixing a bug | "Users report a duplicate charge when retrying a failed checkout. Reproduce and fix it within the checkout use case; don't touch unrelated payment logic." |
 | Verifying an implementation | "Run verification on the checkout implementation against SPEC-009 and the use-case-execution contract. Report PASS/FAIL/UNVERIFIABLE per obligation." |
 | Reviewing engineering quality | "Review the checkout implementation for risk and completeness. Verification evidence already exists — reuse it rather than repeating it." |
 | Incomplete or ambiguous knowledge | "SPEC-009 doesn't define behavior for a canceled-then-retried order. Don't guess — report what's missing and who owns the decision." |
+| Resolving a reported knowledge gap | "For the canceled-then-retried gap in SPEC-009: retried orders must reuse the original idempotency key." |
 | Finalizing completed work in Git | "The checkout fix is verified and reviewed. Commit it on a new branch. Do not push." |
 
 ## Extending the System

@@ -6,13 +6,15 @@ Establish the minimum verified project baseline required for approved developmen
 
 ## When to Use
 
-Use Bootstrap when a repository is new, incomplete, inconsistent with its approved baseline, or missing required runtime, build, test, analysis, or foundational structure. Do not use it for feature implementation, speculative infrastructure, or changes already supported by a valid baseline.
+Use Bootstrap when a repository's code, configuration, or foundational structure is new, incomplete, inconsistent with its approved baseline, or missing required runtime, build, test, or analysis setup. Do not use it for feature implementation, speculative infrastructure, or changes already supported by a valid baseline.
+
+A new codebase is not by itself sufficient to start: Bootstrap assumes `PROJECT.md`, `ARCHITECTURE.md`, `STACK.md`, and `CONVENTIONS.md` already hold approved initial project knowledge, not unfilled templates. When that knowledge does not yet exist, run [`workflows/initial-knowledge-establishment.md`](initial-knowledge-establishment.md) first rather than starting Bootstrap.
 
 ## Inputs
 
 - Bootstrap objective, authorized scope, and explicit constraints
 - Existing repository, configuration, environment, and user-owned changes
-- `PROJECT.md`, `ARCHITECTURE.md`, `STACK.md`, and `CONVENTIONS.md`, as applicable
+- `PROJECT.md`, `ARCHITECTURE.md`, `STACK.md`, and `CONVENTIONS.md`, approved and sufficient for a baseline, as applicable
 - Relevant ADRs
 - Applicable Design Knowledge when bootstrapping user-interface foundations:
   - `PRODUCT_EXPERIENCE.md` for required product shell or structural experience context
@@ -31,6 +33,8 @@ Inventory the repository before changing it: files, configuration, runtime and d
 ### 2. Verify the Baseline
 
 Compare the observed state with authoritative knowledge. Identify what is valid, missing, inconsistent, obsolete, or blocked, and define the smallest required bootstrap scope. Do not treat assumptions as requirements.
+
+If `context/` holds no approved project-level knowledge beyond unfilled templates, stop before scaffolding and hand off to [`workflows/initial-knowledge-establishment.md`](initial-knowledge-establishment.md) rather than defining a bootstrap scope from invented assumptions.
 
 ### 3. Scaffold
 
@@ -64,6 +68,7 @@ Run available installation, build, test, analysis, formatting, configuration, an
 - Prefer existing valid configuration over replacement.
 - Do not implement product features, business rules, speculative infrastructure, or future abstractions.
 - Do not invent architecture, design, conventions, technology, version, or project-policy decisions.
+- Do not scaffold, configure, or lock dependencies from assumed or invented project-level knowledge; confirm approved initial project knowledge exists first.
 - Keep generated artifacts consistent and reproducible.
 - Require explicit authorization for destructive replacement or removal.
 - Do not bypass or weaken validation to report success.
@@ -72,7 +77,7 @@ Run available installation, build, test, analysis, formatting, configuration, an
 
 ### Missing or Conflicting Knowledge
 
-Identify the missing or conflicting decision and its owner, apply established ownership or precedence rules, continue unaffected setup, and stop only the affected work when the issue remains material. Do not select a project-wide default silently.
+Identify the missing or conflicting decision and its owner, apply established ownership or precedence rules, continue unaffected setup, and stop only the affected work when the issue remains material. Do not select a project-wide default silently. Once a human decision resolves the gap, run [`workflows/knowledge-resolution.md`](knowledge-resolution.md) to update the affected authoritative knowledge before resuming the affected setup.
 
 ### Environment Blocker
 
