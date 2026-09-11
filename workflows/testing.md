@@ -94,7 +94,7 @@ Report:
 
 ### Missing or Conflicting Knowledge
 
-Identify the issue and its owner, apply established ownership or precedence rules, and do not encode an invented interpretation. Continue unaffected work; stop affected test design only when the decision materially changes the expected result.
+Identify the issue and its owner, apply established ownership or precedence rules, and do not encode an invented interpretation. Continue unaffected work; stop affected test design only when the decision materially changes the expected result. Once a human decision resolves the gap, run [`workflows/knowledge-resolution.md`](knowledge-resolution.md) to update the affected authoritative knowledge before resuming affected test design.
 
 ### Infrastructure Failure
 

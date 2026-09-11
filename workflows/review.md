@@ -99,7 +99,7 @@ Continue where evidence is sufficient, identify confidence limits, and recommend
 
 ### Missing or Conflicting Knowledge
 
-Identify the owning or conflicting sources and apply established ownership or precedence rules. If the issue remains material, produce a `KNOWLEDGE GAP`, name the Resolution Owner, and mark whether a decision is required.
+Identify the owning or conflicting sources and apply established ownership or precedence rules. If the issue remains material, produce a `KNOWLEDGE GAP`, name the Resolution Owner, mark whether a decision is required, and set Recommended Next Workflow to [`workflows/knowledge-resolution.md`](knowledge-resolution.md) when a human decision is expected to resolve it.
 
 ### Insufficient Technical Evidence
 

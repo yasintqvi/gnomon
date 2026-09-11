@@ -90,7 +90,7 @@ Identify what is missing and mark the affected obligation UNVERIFIABLE.
 
 ### Missing or Conflicting Knowledge
 
-Do not invent an expectation. Apply established ownership or precedence rules only when they resolve the issue objectively; otherwise report the undefined expectation or mark the affected obligation UNVERIFIABLE.
+Do not invent an expectation. Apply established ownership or precedence rules only when they resolve the issue objectively; otherwise report the undefined expectation or mark the affected obligation UNVERIFIABLE. Once a human decision resolves the gap, run [`workflows/knowledge-resolution.md`](knowledge-resolution.md) to update the affected authoritative knowledge before re-verifying the affected obligation.
 
 ### Execution Failure
 

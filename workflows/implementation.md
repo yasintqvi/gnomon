@@ -83,7 +83,7 @@ Gather reproducible evidence that acceptance criteria and other applicable oblig
 
 ### Missing or Conflicting Knowledge
 
-Identify the issue and its owning document, apply established ownership or precedence rules, continue unaffected work, and stop only the affected portion when the issue remains material. Do not silently choose or invent behavior, policy, architecture, design, or technology.
+Identify the issue and its owning document, apply established ownership or precedence rules, continue unaffected work, and stop only the affected portion when the issue remains material. Do not silently choose or invent behavior, policy, architecture, design, or technology. Once a human decision resolves the gap, run [`workflows/knowledge-resolution.md`](knowledge-resolution.md) to update the affected authoritative knowledge before resuming the affected portion.
 
 ### Repository Conflict
 
