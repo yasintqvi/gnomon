@@ -1,3 +1,38 @@
+---
+identity: git-finalization
+specification_reference: none
+requires_approved_specification: false
+result:
+  terminal_path: outcome
+  classification:
+    COMMIT_PREPARED: success
+    PUBLISHED: success
+    BLOCKED: blocked
+  schema:
+    type: object
+    required:
+      - outcome
+    properties:
+      outcome:
+        type: string
+        enum:
+          - COMMIT_PREPARED
+          - PUBLISHED
+          - BLOCKED
+      included:
+        type:
+          - string
+          - "null"
+      excluded:
+        type:
+          - string
+          - "null"
+      remaining_unresolved:
+        type:
+          - string
+          - "null"
+---
+
 # Git Finalization Workflow
 
 ## Purpose
@@ -12,8 +47,9 @@ This workflow packages work; it does not implement, review, verify, merge, or br
 - Repository state and branch policy
 - Requested commit, push, or pull-request scope
 - Explicit publication authorization when applicable
+- The lifecycle state, per [`SPECIFICATION_LIFECYCLE.md`](../specifications/SPECIFICATION_LIFECYCLE.md), of any Specification governing the disclosed change
 
-Before proceeding, confirm the repository is valid, the intended change is identifiable, unresolved conflicts are absent, and known failures or incomplete work are disclosed. Stop if unrelated changes cannot be safely separated.
+Before proceeding, confirm the repository is valid, the intended change is identifiable, unresolved conflicts are absent, and known failures or incomplete work are disclosed. Stop if unrelated changes cannot be safely separated. If any part of the disclosed change is governed by a Specification that is `Draft`, that part is not eligible for finalization — see Failure Handling. There is no authorization that permits finalizing it anyway.
 
 ## Execution
 
@@ -24,6 +60,8 @@ Inspect status, diff, current branch, upstream and remote configuration, and rec
 ### 2. Define Change Scope
 
 Classify changed artifacts as in-scope, supporting, unrelated, or uncertain. Stage only the first two categories; exclude sensitive files and preserve user-owned work. Never assume the whole working tree belongs to the task.
+
+Exclude any in-scope or supporting artifact whose governing Specification is `Draft` — treat it as ineligible for this run regardless of how the rest of the change is classified.
 
 ### 3. Prepare Branch
 
@@ -53,6 +91,22 @@ When authorized, push only the intended feature branch—never directly to a pro
 
 Report the branch, commit hashes and messages, included scope, files intentionally left untouched, verification status, publication state, pull-request reference when created, and remaining user actions or blockers.
 
+## Outputs
+
+```
+Git Finalization Result
+
+Outcome: COMMIT_PREPARED | PUBLISHED | BLOCKED
+Included:
+Excluded:
+Remaining unresolved (BLOCKED only):
+```
+
+- **Outcome** — `COMMIT_PREPARED` when a validated local commit is prepared but publication was not authorized or requested; `PUBLISHED` when the authorized publication and pull-request steps are also complete; `BLOCKED` when the intended change cannot be identified, unresolved conflicts remain, or the entire requested scope is Draft-governed and therefore excluded.
+- **Included** — informational: branch, commit hashes and messages, and publication state when applicable.
+- **Excluded** — informational: files intentionally left untouched, including any excluded because their governing Specification is `Draft`.
+- **Remaining unresolved** — populated only when `BLOCKED`: the unidentifiable change, the unresolved conflict, or the Draft-governed exclusion that left nothing eligible to finalize.
+
 ## Rules
 
 - Do not include unrelated, sensitive, temporary, or environment-specific files.
@@ -63,7 +117,14 @@ Report the branch, commit hashes and messages, included scope, files intentional
 - Do not push, force-push, open or update a pull request, or otherwise publish without authorization.
 - Do not rewrite published history or merge a pull request unless explicitly authorized by a separate scope.
 - Never use finalization to conceal incomplete implementation, verification gaps, or known failures.
+- Never finalize work governed by a `Draft` Specification; no authorization or urgency permits this exception.
+
+## Failure Handling
+
+### Draft-Governed Work
+
+Part or all of the disclosed change is governed by a Specification that is `Draft`. Exclude that part entirely — do not stage, commit, or publish it under any authorization. If nothing eligible remains, report `BLOCKED` and direct the governing Specification to [`workflows/specification-definition.md`](specification-definition.md) or to Human Approval as applicable. If an eligible, unrelated portion remains, finalize only that portion.
 
 ## Completion Criteria
 
-Finalization is complete at the authorized boundary: either a validated local commit is prepared, or the authorized publication and pull-request steps are complete. The report must make that boundary and every remaining action explicit.
+Finalization is complete at the authorized boundary: either a validated local commit is prepared, or the authorized publication and pull-request steps are complete — and no part of what was finalized is governed by a `Draft` Specification. The report must make that boundary, every exclusion, and every remaining action explicit, with the reported Outcome accurately reflecting which boundary was actually reached.

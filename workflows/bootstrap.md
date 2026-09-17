@@ -1,3 +1,36 @@
+---
+identity: bootstrap
+specification_reference: none
+requires_approved_specification: false
+result:
+  terminal_path: outcome
+  classification:
+    BOOTSTRAP_COMPLETE: success
+    BLOCKED: blocked
+  schema:
+    type: object
+    required:
+      - outcome
+    properties:
+      outcome:
+        type: string
+        enum:
+          - BOOTSTRAP_COMPLETE
+          - BLOCKED
+      baseline_established:
+        type:
+          - string
+          - "null"
+      validation_evidence:
+        type:
+          - string
+          - "null"
+      remaining_unresolved:
+        type:
+          - string
+          - "null"
+---
+
 # Bootstrap Workflow
 
 ## Purpose
@@ -8,13 +41,13 @@ Establish the minimum verified project baseline required for approved developmen
 
 Use Bootstrap when a repository's code, configuration, or foundational structure is new, incomplete, inconsistent with its approved baseline, or missing required runtime, build, test, or analysis setup. Do not use it for feature implementation, speculative infrastructure, or changes already supported by a valid baseline.
 
-A new codebase is not by itself sufficient to start: Bootstrap assumes `PROJECT.md`, `ARCHITECTURE.md`, `STACK.md`, and `CONVENTIONS.md` already hold approved initial project knowledge, not unfilled templates. When that knowledge does not yet exist, run [`workflows/initial-knowledge-establishment.md`](initial-knowledge-establishment.md) first rather than starting Bootstrap.
+A new codebase is not by itself sufficient to start: Bootstrap assumes `PROJECT.md`, `ARCHITECTURE.md`, `STACK.md`, and `CONVENTIONS.md` already hold the knowledge this run's Scaffold, Configure, Lock Dependencies, and Validate steps need — not that every section is filled in. When that knowledge does not exist at all, run [`workflows/initial-knowledge-establishment.md`](initial-knowledge-establishment.md) first rather than starting Bootstrap.
 
 ## Inputs
 
 - Bootstrap objective, authorized scope, and explicit constraints
 - Existing repository, configuration, environment, and user-owned changes
-- `PROJECT.md`, `ARCHITECTURE.md`, `STACK.md`, and `CONVENTIONS.md`, approved and sufficient for a baseline, as applicable
+- `PROJECT.md`, `ARCHITECTURE.md`, `STACK.md`, and `CONVENTIONS.md`, approved and sufficient for this run's Scaffold, Configure, Lock Dependencies, and Validate steps, as applicable
 - Relevant ADRs
 - Applicable Design Knowledge when bootstrapping user-interface foundations:
   - `PRODUCT_EXPERIENCE.md` for required product shell or structural experience context
@@ -36,6 +69,8 @@ Compare the observed state with authoritative knowledge. Identify what is valid,
 
 If `context/` holds no approved project-level knowledge beyond unfilled templates, stop before scaffolding and hand off to [`workflows/initial-knowledge-establishment.md`](initial-knowledge-establishment.md) rather than defining a bootstrap scope from invented assumptions.
 
+An empty, placeholder, or incomplete section is not itself a gap. Treat knowledge as blocking only when this run's actual Scaffold, Configure, Lock Dependencies, or Validate steps depend on it and proceeding would require inventing a decision or an unsafe assumption (see Rules) — otherwise continue without it, regardless of why it is empty. This applies equally to Domain, Design Knowledge, and partially established `PROJECT.md`/`ARCHITECTURE.md`/`STACK.md`/`CONVENTIONS.md` content.
+
 ### 3. Scaffold
 
 Create only the directories and foundational artifacts required by the approved Architecture, Stack, Conventions, and—when applicable—Design Knowledge. Reuse valid existing structure and avoid feature-specific code or speculative modules.
@@ -54,11 +89,19 @@ Run available installation, build, test, analysis, formatting, configuration, an
 
 ## Outputs
 
-- Minimal verified project baseline
-- Required structure, configuration, manifests, and lock state
-- Foundational test or analysis setup where approved
-- Validation evidence
-- Explicit blockers, assumptions, and remaining setup work
+```
+Bootstrap Result
+
+Outcome: BOOTSTRAP_COMPLETE | BLOCKED
+Baseline established:
+Validation evidence:
+Remaining unresolved (BLOCKED only):
+```
+
+- **Outcome** — `BOOTSTRAP_COMPLETE` only when the approved baseline is runnable, required structure, configuration, manifests, and lock state are in place, and validation evidence is recorded; `BLOCKED` otherwise.
+- **Baseline established** — informational: the minimal verified project baseline produced, including foundational test or analysis setup where approved.
+- **Validation evidence** — informational: commands and results from Step 6 (Validate).
+- **Remaining unresolved** — populated only when `BLOCKED`: the missing or conflicting decision, environment blocker, repository conflict, or validation failure preventing completion, plus any explicit assumptions or remaining setup work.
 
 ## Rules
 

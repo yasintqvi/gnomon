@@ -1,3 +1,83 @@
+---
+identity: review
+specification_reference: none
+requires_approved_specification: false
+result:
+  terminal_path: summary.aggregate
+  classification:
+    PASS: success
+    DEFECT: blocked
+    RISK: blocked
+    "KNOWLEDGE GAP": blocked
+  schema:
+    type: object
+    required:
+      - summary
+    properties:
+      findings:
+        type:
+          - array
+          - "null"
+        items:
+          type: object
+          required:
+            - finding_id
+            - classification
+          properties:
+            finding_id:
+              type: string
+            classification:
+              type: string
+              enum:
+                - DEFECT
+                - RISK
+                - "KNOWLEDGE GAP"
+            summary:
+              type:
+                - string
+                - "null"
+            evidence:
+              type:
+                - string
+                - "null"
+            engineering_reasoning:
+              type:
+                - string
+                - "null"
+            impact:
+              type:
+                - string
+                - "null"
+            resolution_owner:
+              type:
+                - string
+                - "null"
+            decision_required:
+              type:
+                - boolean
+                - "null"
+            recommended_next_workflow:
+              type:
+                - string
+                - "null"
+      summary:
+        type: object
+        required:
+          - aggregate
+        properties:
+          findings:
+            type:
+              - string
+              - "null"
+          aggregate:
+            type: string
+            enum:
+              - DEFECT
+              - RISK
+              - "KNOWLEDGE GAP"
+              - PASS
+---
+
 # Review Workflow
 
 ## Purpose
@@ -36,6 +116,8 @@ Identify the target, scope, governing knowledge, applicable contracts and review
 
 Create a bounded question set from reusable review questions, approved project and Design Knowledge, contracts, implementation relationships, and Verification Evidence. Questions may examine engineering consequences of approved knowledge but must not create requirements.
 
+When the target is governed by a Specification with declared `Dependencies` (see [`SPECIFICATION_DEPENDENCIES.md`](../specifications/SPECIFICATION_DEPENDENCIES.md)), include each dependency's Target Presence and Target Lifecycle State among the facts available to Step 3.
+
 ### 3. Evaluate
 
 Evaluate each applicable question using technical evidence and engineering reasoning. Explicitly distinguish observed facts, approved requirements, reasoning, preferences, and uncertainty.
@@ -52,6 +134,8 @@ Assign one outcome to each applicable question:
 
 Provide supporting reasoning for every non-trivial outcome.
 
+A dependency whose Target Presence is `MISSING` is ordinarily a `KNOWLEDGE GAP` (a dangling reference) or `RISK`, as the evidence warrants; a dependency whose Target Lifecycle State is `DRAFT` is a `RISK` or `KNOWLEDGE GAP` only when the target's unresolved state is materially relevant to the question at hand — not by default. A dependency that is `PRESENT` and `APPROVED` raises no dependency-state concern by itself. Use the existing outcome vocabulary above; do not introduce a new classification for dependency concerns.
+
 ### 5. Produce Actionable Findings
 
 Only `DEFECT`, `RISK`, and `KNOWLEDGE GAP` create actionable findings. Consolidate observations with one underlying issue unless they require independent resolution.
@@ -64,9 +148,9 @@ Identify the artifact or implementation area that owns resolution, such as Imple
 
 Set `Decision Required: Yes` when resolution requires new or changed authoritative knowledge. Review may describe the required resolution category but must not design or approve the solution.
 
-## Output
+## Outputs
 
-**Engineering Review Report**
+**Engineering Review Report** — one block per finding:
 
 ```text
 Finding ID:
@@ -79,6 +163,17 @@ Resolution Owner:
 Decision Required: Yes | No
 Recommended Next Workflow:
 ```
+
+**Review Summary** — one block per run, mechanically derived from the findings above:
+
+```text
+Review Summary
+
+Findings: [count by classification]
+Aggregate: DEFECT | RISK | KNOWLEDGE GAP | PASS
+```
+
+`Aggregate` is `DEFECT` if any finding is `DEFECT`; otherwise `RISK` if any finding is `RISK`; otherwise `KNOWLEDGE GAP` if any finding is `KNOWLEDGE GAP`; otherwise `PASS`. It summarizes the findings above and is not itself a new judgment or a lifecycle state.
 
 Also report scope, passes where useful, remaining uncertainty, and the effect of missing evidence.
 
@@ -107,6 +202,6 @@ Identify missing evidence, report uncertainty, avoid fabricated conclusions, and
 
 ## Completion Criteria
 
-Review is complete when all applicable questions have been evaluated; Verification Evidence has been reused where relevant; actionable findings have stable IDs, owners, decision status, and next workflows; material uncertainty is reported; and neither implementation nor project knowledge has been changed.
+Review is complete when all applicable questions have been evaluated; Verification Evidence has been reused where relevant; actionable findings have stable IDs, owners, decision status, and next workflows; dependency-state concerns have been classified using the existing outcome vocabulary rather than a new one; the reported `Aggregate` accurately reflects the findings; material uncertainty is reported; and neither implementation nor project knowledge has been changed.
 
 Verification asks whether objective evidence proves compliance. Review asks whether the artifact exposes a material defect, risk, or knowledge gap. Resolution begins only after authorization and remains a separate responsibility.

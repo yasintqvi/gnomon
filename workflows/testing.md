@@ -1,3 +1,36 @@
+---
+identity: testing
+specification_reference: optional
+requires_approved_specification: true
+result:
+  terminal_path: outcome
+  classification:
+    TESTING_COMPLETE: success
+    BLOCKED: blocked
+  schema:
+    type: object
+    required:
+      - outcome
+    properties:
+      outcome:
+        type: string
+        enum:
+          - TESTING_COMPLETE
+          - BLOCKED
+      evidence:
+        type:
+          - string
+          - "null"
+      coverage:
+        type:
+          - string
+          - "null"
+      remaining_unresolved:
+        type:
+          - string
+          - "null"
+---
+
 # Testing Workflow
 
 ## Purpose
@@ -8,11 +41,14 @@ Design, implement, execute, and evaluate tests that provide reproducible evidenc
 
 Use this workflow to verify a Specification or explicitly scoped behavior, validate a change or refactor, reproduce a defect, or close an authorized coverage gap. Use Bootstrap when test infrastructure is absent, Implementation when production changes are primary, and Review when no test work is requested.
 
+When the behavior under test is governed by a Specification, that Specification must be `Approved`, per [`SPECIFICATION_LIFECYCLE.md`](../specifications/SPECIFICATION_LIFECYCLE.md). Do not treat `Draft` content as an authoritative test contract, and do not write tests against it under any authorization — run [`workflows/specification-definition.md`](specification-definition.md) and obtain Human Approval first.
+
 ## Inputs
 
 * Target behavior, acceptance criteria, defect, or authorized test scope
 * Existing implementation, tests, configuration, fixtures, and environment
-* Relevant Specifications and Domain knowledge
+* Relevant Specifications and Domain knowledge — a governing Specification must be `Approved`
+* Each governing Specification's `Dependencies` (see [`SPECIFICATION_DEPENDENCIES.md`](../specifications/SPECIFICATION_DEPENDENCIES.md)) and their current Target Presence and Target Lifecycle State
 * ARCHITECTURE.md, STACK.md, and CONVENTIONS.md, as applicable
 * Applicable ADRs and Artifact Contracts
 * Applicable Design Knowledge when user-facing behavior is under test:
@@ -30,6 +66,8 @@ Expected outcomes come from their authoritative sources. Tests do not create pro
 ### 1. Establish Scope
 
 Identify target behavior, acceptance criteria, applicable rules, success and failure cases, exclusions, assumptions, and blocking ambiguities.
+
+When the target behavior is governed by a Specification, confirm it is `Approved` before designing tests against it. For each Specification the target behavior depends on (per its `Dependencies` section), check Target Presence and Target Lifecycle State: do not treat a `MISSING` or `DRAFT` target's behavior as an authoritative test contract — exclude the affected tests from this run rather than testing against unconfirmed behavior.
 
 ### 2. Inspect
 
@@ -82,15 +120,34 @@ Report:
 * Preserve user-owned changes and remain within authorized scope.
 * Never claim evidence beyond what was actually executed.
 * Do not modify production behavior unless implementation changes are explicitly authorized.
+* Never write or run tests that treat a `Draft` Specification's behavior as authoritative; no authorization permits this exception.
+* Exclude only the tests that materially depend on a `MISSING` or `DRAFT` dependency target; continue unaffected testing.
 
 ## Outputs
 
-* Evidence-based testing of the target behavior
-* New or updated tests and required test support
-* Execution evidence and coverage-gap analysis
-* Classified failures, unverified conditions, risks, and limitations
+```
+Testing Result
+
+Outcome: TESTING_COMPLETE | BLOCKED
+Evidence:
+Coverage:
+Remaining unresolved (BLOCKED only):
+```
+
+- **Outcome** — `TESTING_COMPLETE` only when the authorized scope has reproducible test evidence and no valid check was weakened; `BLOCKED` when a governing Specification is not `Approved`, a dependency's current state excludes affected tests, or a material gap remains unresolved.
+- **Evidence** — informational: execution evidence, classified failures, and coverage-gap analysis.
+- **Coverage** — informational: new or updated tests and required test support.
+- **Remaining unresolved** — populated only when `BLOCKED`: the unapproved Specification, the excluded tests and the dependency causing exclusion, or the material decision still open.
 
 ## Failure Handling
+
+### Governing Specification Not Approved
+
+Exclude the affected tests and report `BLOCKED`. Direct the Specification to [`workflows/specification-definition.md`](specification-definition.md) or to Human Approval as applicable. Do not design or run tests against its `Draft` content under any authorization.
+
+### Dependency Not Yet Available
+
+A dependency's Target Presence is `MISSING`, or its Target Lifecycle State is `DRAFT`, and the affected tests would treat that target's behavior as authoritative. Exclude only those tests, continue unaffected testing, and report the exclusion. Rerun the affected tests once the dependency becomes `Approved`.
 
 ### Missing or Conflicting Knowledge
 
@@ -114,4 +171,4 @@ Establish pre-existence where possible, keep it separate from current failures, 
 
 ## Completion Criteria
 
-Testing is complete when the authorized scope and applicable acceptance criteria have reproducible test evidence; relevant behavior has been exercised at a sufficient and reliable test level; required tests ran; failures are accurately classified; no valid check was weakened; and unexecuted checks, unverified conditions, risks, and limitations are explicit.
+Testing is complete when any governing Specification is confirmed `Approved`; the authorized scope and applicable acceptance criteria have reproducible test evidence; relevant behavior has been exercised at a sufficient and reliable test level; required tests ran; failures are accurately classified; no valid check was weakened; every dependency excluding affected tests has been identified rather than silently bypassed; and unexecuted checks, unverified conditions, risks, and limitations are explicit.

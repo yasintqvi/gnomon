@@ -6,6 +6,12 @@ Define the business requirements and expected behavior of the `[Use Case Name]` 
 
 This specification describes what the system must achieve without prescribing implementation details.
 
+This document's lifecycle and approval state (Draft or Approved) are governed by [`SPECIFICATION_LIFECYCLE.md`](SPECIFICATION_LIFECYCLE.md) and are never recorded as a field inside this document.
+
+A Draft Specification is brought to `READY_FOR_APPROVAL` through [`workflows/specification-definition.md`](../workflows/specification-definition.md), which does not require every section below to be filled — only what this use case's behavior actually needs.
+
+The `[ID]` above is assigned deterministically by [`workflows/specification-discovery.md`](../workflows/specification-discovery.md)'s Specification Identity rule, whether this file was created through Discovery or directly by a Human — never chosen freely and never `000`, which is reserved for this template.
+
 ---
 
 ## Use Case
@@ -166,6 +172,23 @@ List relevant domain concepts or rules used by this specification.
 List relevant ADRs when an existing architectural decision affects the interpretation or implementation of this use case.
 
 * [ADR]
+
+---
+
+## Dependencies
+
+List other Specifications this one depends on, by identity only — never by title or prose. A dependency belongs here only when this use case's own behavior would become incomplete, incorrect, or unverifiable without the listed Specification; see [`SPECIFICATION_DEPENDENCIES.md`](SPECIFICATION_DEPENDENCIES.md) for the governing test. Do not list a Specification here merely because it seemed useful to build first.
+
+* [SPEC-ID]
+* [SPEC-ID]
+
+When there are none:
+
+```
+## Dependencies
+
+None.
+```
 
 ---
 

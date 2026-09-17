@@ -1,3 +1,40 @@
+---
+identity: knowledge-resolution
+specification_reference: none
+requires_approved_specification: false
+result:
+  terminal_path: outcome
+  classification:
+    RESOLVED: success
+    BLOCKED: blocked
+  schema:
+    type: object
+    required:
+      - outcome
+    properties:
+      outcome:
+        type: string
+        enum:
+          - RESOLVED
+          - BLOCKED
+      updated_knowledge:
+        type:
+          - string
+          - "null"
+      adr_created:
+        type:
+          - string
+          - "null"
+      resumed:
+        type:
+          - string
+          - "null"
+      remaining_unresolved:
+        type:
+          - string
+          - "null"
+---
+
 # Knowledge Resolution Workflow
 
 ## Purpose
@@ -8,7 +45,7 @@ Knowledge Resolution does not originate product or architectural direction. It a
 
 ## When to Use
 
-Use this workflow when Bootstrap, Implementation, Testing, Verification, or Review has stopped affected work on a material missing or conflicting knowledge issue and a human has since provided the decision. Do not use it to invent a decision, and do not use it for knowledge changes that were not preceded by a reported gap and a human decision — those follow ordinary authoring of the owning document. Do not use it to establish a new project's initial baseline from scratch — that is [`workflows/initial-knowledge-establishment.md`](initial-knowledge-establishment.md).
+Use this workflow when Bootstrap, Specification Definition, Implementation, Testing, Verification, or Review has stopped affected work on a material missing or conflicting knowledge issue and a human has since provided the decision. Do not use it to invent a decision, and do not use it for knowledge changes that were not preceded by a reported gap and a human decision — those follow ordinary authoring of the owning document. Do not use it to establish a new project's initial baseline from scratch — that is [`workflows/initial-knowledge-establishment.md`](initial-knowledge-establishment.md).
 
 ## Inputs
 
@@ -52,6 +89,8 @@ Create an ADR only when resolving or implementing the decision required a signif
 
 ### 6. Update Authoritative Knowledge
 
+Before writing, inspect each owning document's current content to determine which parts, if any, already reflect this decision — for example from an earlier interrupted run, or from a manual edit made in the meantime. Apply only what remains necessary; preserve already-correct content exactly as it stands, and never overwrite current repository truth with an assumption carried over from an earlier, incomplete run.
+
 Apply every update identified in steps 2–5 to its owning document, preserving each document's existing structure, scope, and unrelated content.
 
 ### 7. Check Consistency
@@ -64,11 +103,21 @@ Return to the workflow and task that reported the gap, with the decision and upd
 
 ## Outputs
 
-- Authoritative knowledge updated, limited to documents whose owned content the decision changed
-- Any new or updated ADR, with rationale, alternatives, and consequences
-- A short record distinguishing the primary effect, secondary consequences, and additional engineering decisions
-- Confirmation that affected knowledge is free of contradiction or staleness introduced by the change
-- The resumed workflow and task
+```
+Knowledge Resolution Result
+
+Outcome: RESOLVED | BLOCKED
+Updated knowledge:
+ADR created:
+Resumed:
+Remaining unresolved (BLOCKED only):
+```
+
+- **Outcome** — `RESOLVED` only when the decision has been confirmed, applied to every document whose owned knowledge it actually changed, checked for consistency, and the originating workflow and task have resumed; `BLOCKED` when the decision does not resolve the gap, a new gap surfaces requiring its own explicit decision, or ownership is materially ambiguous.
+- **Updated knowledge** — informational: the documents updated, distinguishing the primary effect, secondary consequences, and any additional engineering decisions.
+- **ADR created** — informational: any new or updated ADR, with rationale, alternatives, and consequences, when independently justified.
+- **Resumed** — informational: the workflow and task that resumed.
+- **Remaining unresolved** — populated only when `BLOCKED`: the unresolved ambiguity or the new gap awaiting its own decision.
 
 ## Rules
 
@@ -79,6 +128,7 @@ Return to the workflow and task that reported the gap, with the decision and upd
 - Update only documents whose owned knowledge changed; do not duplicate the same statement across documents.
 - Do not expand a decision beyond what the human approved.
 - Keep each updated document internally consistent with the rest of its own content.
+- Before writing, inspect current content for what an earlier interrupted or partial run, or a manual edit, may already have applied; never blindly repeat an already-correct edit, and never let an earlier run's assumption override current repository truth.
 
 ## Failure Handling
 
@@ -94,6 +144,10 @@ Treat it as a new material knowledge gap: stop only the affected part of resolut
 
 Report contradictions outside the current decision's scope rather than resolving them silently, and recommend the workflow that owns them.
 
+### Resuming After Partial Application
+
+Some documents identified in Steps 2–5 may already reflect this decision, from an earlier interrupted run or a manual edit made in the meantime. Apply only what remains necessary; do not repeat an already-correct edit, and do not overwrite current content with what an earlier, incomplete run assumed.
+
 ## Completion Criteria
 
-Knowledge Resolution is complete when the human decision has been confirmed; the primary and secondary effects have been determined; any additional engineering decision exposed by implementation has either been resolved by existing knowledge or independently decided by the human, never inferred from the original approval; every authoritative document whose owned knowledge changed has been updated; any independently justified ADR has been created and linked; affected knowledge has been checked for contradiction or staleness; and the originating workflow and task have resumed.
+Knowledge Resolution is complete when the human decision has been confirmed; the primary and secondary effects have been determined; any additional engineering decision exposed by implementation has either been resolved by existing knowledge or independently decided by the human, never inferred from the original approval; every affected document's current content has been inspected before writing, so already-correct work from an earlier run or a manual edit is preserved rather than repeated or overwritten; every authoritative document whose owned knowledge changed has been updated; any independently justified ADR has been created and linked; affected knowledge has been checked for contradiction or staleness; the originating workflow and task have resumed; and the reported Outcome accurately reflects whether `RESOLVED`'s conditions were actually met.

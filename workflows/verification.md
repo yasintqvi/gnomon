@@ -1,3 +1,61 @@
+---
+identity: verification
+specification_reference: none
+requires_approved_specification: false
+result:
+  terminal_path: summary.aggregate
+  classification:
+    PASS: success
+    FAIL: blocked
+    UNVERIFIABLE: blocked
+  schema:
+    type: object
+    required:
+      - summary
+    properties:
+      evidence:
+        type:
+          - array
+          - "null"
+        items:
+          type: object
+          required:
+            - obligation
+            - result
+          properties:
+            obligation:
+              type: string
+            source:
+              type:
+                - string
+                - "null"
+            result:
+              type: string
+              enum:
+                - PASS
+                - FAIL
+                - UNVERIFIABLE
+            evidence:
+              type:
+                - string
+                - "null"
+      summary:
+        type: object
+        required:
+          - aggregate
+        properties:
+          obligations_evaluated:
+            type:
+              - string
+              - "null"
+          aggregate:
+            type: string
+            enum:
+              - PASS
+              - FAIL
+              - UNVERIFIABLE
+---
+
 # Verification Workflow
 
 ## Purpose
@@ -34,6 +92,8 @@ Create a bounded set of objectively verifiable obligations traceable to approved
 
 Do not create an obligation from an assumption or undefined expectation.
 
+For an obligation traceable to a Specification with declared `Dependencies` (see [`SPECIFICATION_DEPENDENCIES.md`](../specifications/SPECIFICATION_DEPENDENCIES.md)), note each dependency's Target Presence and Target Lifecycle State; carry this into Step 4.
+
 ### 3. Gather Evidence
 
 Collect observable and reproducible evidence sufficient to evaluate each obligation.
@@ -54,13 +114,15 @@ Assign exactly one result to every applicable obligation:
 
 Do not convert absent or insufficient evidence into PASS or FAIL.
 
+Mark an obligation UNVERIFIABLE, rather than PASS or FAIL, when it depends on a dependency whose Target Presence is `MISSING` or whose Target Lifecycle State is `DRAFT` — that target's behavior is not yet authoritative evidence. Evaluate the obligation normally when the dependency is `PRESENT` and `APPROVED`. Do not block the entire run over one affected obligation; evaluate every other applicable obligation normally.
+
 ### 5. Report Evidence
 
 Record each obligation, authoritative source, result, and supporting evidence. Include artifact locations, commands, tests, runtime observations, or analysis results where useful, and distinguish observed evidence from contextual explanation.
 
-## Output
+## Outputs
 
-**Verification Evidence**
+**Verification Evidence** — one block per obligation:
 
 ```
 Obligation:
@@ -69,7 +131,16 @@ Result: PASS | FAIL | UNVERIFIABLE
 Evidence:
 ```
 
-Verification does not classify defects, risks, knowledge gaps, or improvement opportunities; those belong to Review.
+**Verification Summary** — one block per run, mechanically derived from the per-obligation results above:
+
+```
+Verification Summary
+
+Obligations evaluated:
+Aggregate: PASS | FAIL | UNVERIFIABLE
+```
+
+`Aggregate` is `FAIL` if any obligation is `FAIL`; otherwise `UNVERIFIABLE` if any obligation is `UNVERIFIABLE`; otherwise `PASS`. It summarizes the per-obligation results above and is not itself a new judgment — Verification still does not classify defects, risks, knowledge gaps, or improvement opportunities, and `Aggregate` is not a lifecycle state or an approval decision; those belong to Review and Human Approval respectively.
 
 ## Rules
 
@@ -88,6 +159,10 @@ Verification does not classify defects, risks, knowledge gaps, or improvement op
 
 Identify what is missing and mark the affected obligation UNVERIFIABLE.
 
+### Dependency Not Yet Available
+
+A dependency's Target Presence is `MISSING`, or its Target Lifecycle State is `DRAFT`, for an obligation traceable to it. Mark only that obligation UNVERIFIABLE and continue evaluating every other applicable obligation normally.
+
 ### Missing or Conflicting Knowledge
 
 Do not invent an expectation. Apply established ownership or precedence rules only when they resolve the issue objectively; otherwise report the undefined expectation or mark the affected obligation UNVERIFIABLE. Once a human decision resolves the gap, run [`workflows/knowledge-resolution.md`](knowledge-resolution.md) to update the affected authoritative knowledge before re-verifying the affected obligation.
@@ -98,4 +173,4 @@ Record the failure, try another objective mechanism when appropriate, and mark t
 
 ## Completion Criteria
 
-Verification is complete when scope and governing knowledge are identified, every applicable traceable obligation has been evaluated using evidence appropriate to that obligation, unverifiable obligations are explicit, and no engineering conclusions or new project knowledge have been introduced.
+Verification is complete when scope and governing knowledge are identified, every applicable traceable obligation has been evaluated using evidence appropriate to that obligation, obligations affected by a `MISSING` or `DRAFT` dependency are marked UNVERIFIABLE rather than blocking the run, unverifiable obligations are explicit, the reported `Aggregate` accurately reflects the per-obligation results, and no engineering conclusions or new project knowledge have been introduced.
