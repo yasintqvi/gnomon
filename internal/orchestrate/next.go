@@ -93,11 +93,19 @@ func Next(root string) (*present.Report, error) {
 		))
 	}
 
-	changed, err := gitutil.HasChanges(root)
-	if err != nil {
-		return nil, err
-	}
-	if changed {
+	gitStatus, gitErr := gitutil.Inspect(root)
+	switch {
+	case gitErr != nil:
+		// Git is a capability Git-related guidance uses, not a prerequisite for Specification
+		// guidance — an unexpected Git failure degrades this section, it does not discard the
+		// Specification guidance already computed above.
+		rep.Outcome = present.Failed
+		rep.AddSection("Working Tree", fmt.Sprintf("Git state could not be inspected: %s. Specification guidance above is unaffected.", gitErr))
+		rep.Next = "Investigate the Git error above, then retry."
+		return rep, gitErr
+	case !gitStatus.Available:
+		rep.AddSection("Working Tree", "Not a Git repository — Git Finalization is not applicable here.")
+	case gitStatus.Changed:
 		rep.AddSection("Working Tree", "Uncommitted changes are present — `gnomon finalize` may be worth considering when you judge the work ready.")
 	}
 

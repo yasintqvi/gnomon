@@ -178,6 +178,67 @@ func TestStatus_UncommittedChanges_Reported(t *testing.T) {
 	}
 }
 
+// TestStatus_NotAGitRepository_SpecStateStillReported_GitFinalizationNotApplicable is status's
+// side of the same dogfooding regression covered in next_test.go: an initialized project that is
+// not a Git repository must still report Specification state.
+func TestStatus_NotAGitRepository_SpecStateStillReported_GitFinalizationNotApplicable(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Status(root)
+	if err != nil {
+		t.Fatalf("expected a non-Git project to still produce Status, got: %v", err)
+	}
+	if report.Outcome != present.Success {
+		t.Fatalf("expected Success, got %v", report.Outcome)
+	}
+	rendered := present.Render(report, false)
+	if !strings.Contains(rendered, "SPEC-001: Draft") {
+		t.Fatalf("expected Specification state despite no Git repository: %s", rendered)
+	}
+	if !strings.Contains(rendered, "not a Git repository") || !strings.Contains(rendered, "Git Finalization is not applicable") {
+		t.Fatalf("expected an explicit, concise statement that Git Finalization is not applicable: %s", rendered)
+	}
+}
+
+// TestStatus_UnexpectedGitFailure_PreservesSpecState_NotMisclassifiedAsNoRepo mirrors
+// TestNext_UnexpectedGitFailure_PreservesSpecGuidance_NotMisclassifiedAsNoRepo for status.
+func TestStatus_UnexpectedGitFailure_PreservesSpecState_NotMisclassifiedAsNoRepo(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+	// Corrupt the index so `git rev-parse --git-dir` still succeeds (it is still a Git
+	// repository) but `git status` fails for a reason that is NOT "not a repository".
+	if err := os.WriteFile(filepath.Join(root, ".git", "index"), []byte("garbage not an index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Status(root)
+	if err == nil {
+		t.Fatalf("expected an unexpected Git failure to be reported as an error")
+	}
+	if report == nil {
+		t.Fatalf("expected a Report to still be returned despite the Git failure")
+	}
+	rendered := present.Render(report, false)
+	if !strings.Contains(rendered, "SPEC-001: Draft") {
+		t.Fatalf("expected Specification state to survive an unexpected Git failure: %s", rendered)
+	}
+	if strings.Contains(rendered, "not a Git repository") {
+		t.Fatalf("did not expect an unexpected Git failure to be misclassified as 'not a Git repository': %s", rendered)
+	}
+}
+
 func TestStatus_UnsupportedContractVersion_RefusesAndPointsAtValidate(t *testing.T) {
 	root := t.TempDir()
 	configureGitIdentity(t, root)

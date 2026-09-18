@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"gnomon/internal/approval"
 	"gnomon/internal/orchestrate"
 	"gnomon/internal/present"
 )
@@ -34,9 +35,10 @@ func runSpecBrowser(root string) error {
 			{value: actionCreate, label: "+ Create new Specification", searchText: "create"},
 			{value: actionDiscover, label: "+ Discover next Specification", searchText: "discover"},
 		}
+		p := present.NewPalette(colorEnabled())
 		items := make([]filterItem, len(summaries))
 		for i, s := range summaries {
-			label := fmt.Sprintf("%-10s %-30s %s", s.ID, truncate(s.Title, 30), s.Lifecycle)
+			label := fmt.Sprintf("%-10s %-30s %s", s.ID, truncate(s.Title, 30), lifecycleStyle(p, s.Lifecycle))
 			items[i] = filterItem{value: s.ID, label: label, searchText: s.ID + " " + s.Title}
 		}
 
@@ -182,39 +184,64 @@ func runSpecWorkspace(root, id string) error {
 	}
 }
 
-func printSpecDetail(d *orchestrate.SpecDetail) {
-	fmt.Printf("%s — %s\n", d.ID, d.Title)
-	fmt.Printf("  Lifecycle:   %s\n", d.Lifecycle)
-	fmt.Printf("  Fingerprint: %s\n", short(d.Fingerprint))
+// lifecycleStyle applies the same semantic treatment Report Outcomes use to a Specification's
+// lifecycle: Approved is the positive, complete state (green, like Success); Draft still needs
+// action before it is (yellow, like Blocked) — never a failure color, since Draft is an ordinary,
+// expected state, not something gone wrong.
+func lifecycleStyle(p present.Palette, lifecycle approval.Lifecycle) string {
+	if lifecycle == approval.Approved {
+		return p.Good(string(lifecycle))
+	}
+	return p.Warn(string(lifecycle))
+}
+
+// renderSpecDetail builds the Specification workspace's header block: identity/title, current
+// lifecycle, metadata, revision history, and — separately from the action menu itself, which only
+// ever offers what is currently available — every unavailable action's own reason, so a Human
+// never has to guess why something is missing from the menu. Pulled out of printSpecDetail as its
+// own pure function specifically so this presentation is testable without a terminal.
+func renderSpecDetail(d *orchestrate.SpecDetail, p present.Palette) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n", p.Heading(fmt.Sprintf("%s — %s", d.ID, d.Title)))
+	fmt.Fprintf(&b, "  Lifecycle:   %s\n", lifecycleStyle(p, d.Lifecycle))
+	fmt.Fprintf(&b, "  Fingerprint: %s\n", p.Muted(short(d.Fingerprint)))
 	if d.ActiveGrant != nil {
-		fmt.Printf("  Approved by: %s\n", d.ActiveGrant.Approver)
-		fmt.Printf("  Approved at: %s\n", d.ActiveGrant.ApprovedAt)
+		fmt.Fprintf(&b, "  Approved by: %s\n", p.Muted(d.ActiveGrant.Approver))
+		fmt.Fprintf(&b, "  Approved at: %s\n", p.Muted(d.ActiveGrant.ApprovedAt))
 	}
 	if len(d.Revisions) > 0 {
-		fmt.Printf("  Revisions (%d, oldest first):\n", len(d.Revisions))
+		fmt.Fprintf(&b, "  Revisions (%d, oldest first):\n", len(d.Revisions))
 		for i, r := range d.Revisions {
-			status := "superseded" // never revoked, but content has since moved on
+			status := p.Muted("superseded") // never revoked, but content has since moved on
 			switch {
 			case r.Revoked:
-				status = "revoked"
+				status = p.Bad("revoked")
 			case d.ActiveGrant != nil && d.ActiveGrant.GrantID == r.GrantID:
-				status = "current"
+				status = p.Good("current")
 			}
-			fmt.Printf("    %d. %s by %s at %s (%s)\n", i+1, short(r.Fingerprint), r.Approver, r.ApprovedAt, status)
+			fmt.Fprintf(&b, "    %d. %s by %s at %s (%s)\n", i+1, p.Muted(short(r.Fingerprint)), r.Approver, r.ApprovedAt, status)
 		}
 	}
 	var unavailable []string
 	for _, a := range d.Actions {
 		if !a.Available {
-			unavailable = append(unavailable, fmt.Sprintf("%s (%s)", a.Verb, a.Reason))
+			unavailable = append(unavailable, fmt.Sprintf("%s (%s)", p.Code(a.Verb), a.Reason))
 		}
 	}
 	if len(unavailable) > 0 {
-		fmt.Printf("  Not currently available: %s\n", strings.Join(unavailable, "; "))
+		// Not wrapped in Muted as a whole: each entry already bolds its own verb name (Code), and
+		// nesting a second style inside Muted would reset the outer dim styling partway through
+		// the line, since ansiReset clears every attribute, not just the innermost one.
+		fmt.Fprintf(&b, "  Not currently available: %s\n", strings.Join(unavailable, "; "))
 	}
 	if len(d.Unreadable) > 0 {
-		fmt.Printf("  Warning: %s could not be loaded; run `gnomon validate`.\n", strings.Join(d.Unreadable, ", "))
+		fmt.Fprintf(&b, "  %s\n", p.Warn(fmt.Sprintf("Warning: %s could not be loaded; run `gnomon validate`.", strings.Join(d.Unreadable, ", "))))
 	}
+	return b.String()
+}
+
+func printSpecDetail(d *orchestrate.SpecDetail) {
+	fmt.Print(renderSpecDetail(d, present.NewPalette(colorEnabled())))
 	fmt.Println()
 }
 

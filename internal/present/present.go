@@ -36,12 +36,18 @@ func (o Outcome) symbol() string {
 }
 
 // ansi is the one place this package's restrained semantic color vocabulary is defined: green
-// for success, yellow for a Blocked/Cancelled outcome that is not a failure, red for an actual
-// failure or unclassified error, cyan for headings/structure/next-action text. Applying color is
-// purely a rendering-time decision (RenderWithOptions/RenderErrorColor, both gated on a caller-
-// supplied bool) — it never changes Outcome, Summary, Section, or any other field a caller reads.
+// for success, yellow for a Blocked/Cancelled outcome (or anything else that needs attention
+// without being a failure), red for an actual failure or unclassified error, cyan for
+// headings/structure/next-action text, bold for compact machine-oriented values (commands,
+// identifiers, paths — never full syntax highlighting, just one consistent emphasis), dim for
+// secondary/contextual text that should visually recede rather than compete with the content
+// around it. Applying color is purely a rendering-time decision (RenderWithOptions/
+// RenderErrorColor/Palette, all gated on a caller-supplied bool) — it never changes Outcome,
+// Summary, Section, or any other field a caller reads.
 const (
 	ansiReset  = "\033[0m"
+	ansiBold   = "\033[1m"
+	ansiDim    = "\033[2m"
 	ansiGreen  = "\033[32m"
 	ansiYellow = "\033[33m"
 	ansiRed    = "\033[31m"
@@ -66,6 +72,85 @@ func colorize(color, s string) string {
 		return s
 	}
 	return color + s + ansiReset
+}
+
+// Palette is this package's small, closed semantic color vocabulary, exposed for the rare caller
+// that builds its own Human-facing text outside a Report (the interactive Specification
+// workspace) — so every surface draws from exactly one restrained vocabulary, decided once at the
+// CLI edge, rather than each scattering its own ANSI escape codes. Every method is a no-op when
+// the Palette was constructed with color disabled, and always returns s unstyled when s is empty.
+type Palette struct {
+	color bool
+}
+
+// NewPalette returns a Palette that applies color only when color is true — the same bool every
+// other Color-gated entry point in this package already takes.
+func NewPalette(color bool) Palette {
+	return Palette{color: color}
+}
+
+// Heading styles a major label — a section heading, a screen title — the same treatment Report
+// section labels receive.
+func (p Palette) Heading(s string) string { return p.wrap(ansiBold+ansiCyan, s) }
+
+// Good styles a positive, complete, or currently-active state (e.g. "Approved", a passing
+// result) — the same green Success itself uses.
+func (p Palette) Good(s string) string { return p.wrap(ansiGreen, s) }
+
+// Warn styles a state that needs attention without being a failure (e.g. "Draft", a knowledge
+// gap, a non-fatal warning) — the same yellow Blocked/Cancelled itself use.
+func (p Palette) Warn(s string) string { return p.wrap(ansiYellow, s) }
+
+// Bad styles an actual failure — the same red Failed itself uses.
+func (p Palette) Bad(s string) string { return p.wrap(ansiRed, s) }
+
+// Code styles a compact, machine-oriented value — a command, an identifier, a path — with a
+// single consistent emphasis (bold, not a color), so it reads as "a value to copy or type"
+// without competing with this package's semantic-outcome colors. Never syntax highlighting: every
+// such value gets the same treatment regardless of what kind of value it is.
+func (p Palette) Code(s string) string { return p.wrap(ansiBold, s) }
+
+// Muted styles secondary or contextual text — metadata, an unavailable action's reason — so it
+// visually recedes behind the primary content around it.
+func (p Palette) Muted(s string) string { return p.wrap(ansiDim, s) }
+
+func (p Palette) wrap(color, s string) string {
+	if !p.color {
+		return s
+	}
+	return colorize(color, s)
+}
+
+// styleCodeSpans bolds every `backtick-delimited` span in s and leaves everything else, including
+// the backticks themselves, untouched — reusing the Markdown-style inline-code convention already
+// used throughout Gnomon's own guidance text (and naturally present in any Agent narrative that
+// happens to use it) as the one deliberate, unambiguous marker for "this is a command, path, or
+// identifier", rather than inspecting content or attempting real syntax highlighting. A no-op
+// when color is "".
+func styleCodeSpans(s, color string) string {
+	if color == "" || !strings.Contains(s, "`") {
+		return s
+	}
+	var b strings.Builder
+	for {
+		start := strings.IndexByte(s, '`')
+		if start == -1 {
+			b.WriteString(s)
+			break
+		}
+		end := strings.IndexByte(s[start+1:], '`')
+		if end == -1 {
+			b.WriteString(s)
+			break
+		}
+		end += start + 1
+		b.WriteString(s[:start])
+		b.WriteString(color)
+		b.WriteString(s[start : end+1])
+		b.WriteString(ansiReset)
+		s = s[end+1:]
+	}
+	return b.String()
 }
 
 // Section is one labeled, omittable block of content (for example "Delivered" or "Unresolved").
@@ -118,29 +203,36 @@ func Render(r *Report, verbose bool) string {
 }
 
 // RenderWithOptions produces the CLI's presentation of r, applying opts.Color's restrained
-// semantic vocabulary when set: the outcome symbol/summary in the outcome's own color (green
-// success, yellow blocked/cancelled, red failed), section labels and the next-action arrow in
-// cyan. Structure and content are identical to Render at Color: false.
+// semantic vocabulary when set: the outcome symbol/summary bold in the outcome's own color (green
+// success, yellow blocked/cancelled, red failed) as the report's one title line; section labels
+// and the next-action arrow bold cyan as headings, visually distinct from the plain body text
+// beneath them; and, within body/Next/Detail text, any `backtick-delimited` command, path, or
+// identifier bolded in place — the one restrained device this package uses for "compact
+// machine-oriented value", reusing Gnomon's own existing inline-code convention rather than
+// attempting real syntax highlighting. Structure and content are identical to Render at
+// Color: false — color never changes what a line says, only how it is emphasized.
 func RenderWithOptions(r *Report, opts RenderOptions) string {
 	var b strings.Builder
 
-	color := ""
+	titleColor := ""
+	codeColor := ""
 	if opts.Color {
-		color = r.Outcome.color()
+		titleColor = ansiBold + r.Outcome.color()
+		codeColor = ansiBold
 	}
 
-	b.WriteString(colorize(color, r.Outcome.symbol()))
+	b.WriteString(colorize(titleColor, r.Outcome.symbol()))
 	b.WriteString(" ")
 	summary := r.Summary
 	if r.Target != "" && !strings.Contains(r.Summary, r.Target) {
 		summary += " — " + r.Target
 	}
-	b.WriteString(colorize(color, summary))
+	b.WriteString(colorize(titleColor, summary))
 	b.WriteString("\n")
 
 	headingColor := ""
 	if opts.Color {
-		headingColor = ansiCyan
+		headingColor = ansiBold + ansiCyan
 	}
 
 	for _, s := range r.Sections {
@@ -150,7 +242,7 @@ func RenderWithOptions(r *Report, opts RenderOptions) string {
 		b.WriteString("\n")
 		b.WriteString(colorize(headingColor, s.Label))
 		b.WriteString("\n")
-		b.WriteString(indent(s.Body))
+		b.WriteString(indent(styleCodeSpans(s.Body, codeColor)))
 		b.WriteString("\n")
 	}
 
@@ -158,17 +250,21 @@ func RenderWithOptions(r *Report, opts RenderOptions) string {
 		b.WriteString("\n")
 		b.WriteString(colorize(headingColor, "→"))
 		b.WriteString(" ")
-		b.WriteString(r.Next)
+		b.WriteString(styleCodeSpans(r.Next, codeColor))
 		b.WriteString("\n")
 	}
 
 	if opts.Verbose && len(r.Detail) > 0 {
+		mutedColor := ""
+		if opts.Color {
+			mutedColor = ansiDim
+		}
 		b.WriteString("\n")
 		b.WriteString(colorize(headingColor, "Diagnostics:"))
 		b.WriteString("\n")
 		for _, d := range r.Detail {
 			b.WriteString("  ")
-			b.WriteString(d)
+			b.WriteString(colorize(mutedColor, d))
 			b.WriteString("\n")
 		}
 	}
@@ -190,7 +286,7 @@ func RenderErrorColor(err error, color bool) string {
 	if !color {
 		return RenderError(err)
 	}
-	return colorize(ansiRed, "✗") + " " + err.Error() + "\n"
+	return colorize(ansiBold+ansiRed, "✗") + " " + err.Error() + "\n"
 }
 
 func indent(body string) string {

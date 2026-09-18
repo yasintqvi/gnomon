@@ -184,6 +184,45 @@ func TestRenderPayloadSections_RespectsDeclaredSchemaOrder(t *testing.T) {
 	}
 }
 
+// TestRenderObject_MultipleFields_OneContinuationLinePerField proves a single array item (one
+// finding, one obligation) renders as a bulleted, multi-line block — one field per line, each
+// continuation line indented under the leading bullet — rather than one dense semicolon-joined
+// line, so a list of several such items reads as clearly separated entries.
+func TestRenderObject_MultipleFields_OneContinuationLinePerField(t *testing.T) {
+	obj := map[string]interface{}{
+		"obligation": "All tests pass",
+		"result":     "FAIL",
+		"evidence":   "TestFoo failed",
+	}
+	got := renderObject(obj)
+	want := "- Evidence: TestFoo failed\n    Obligation: All tests pass\n    Result: FAIL"
+	if got != want {
+		t.Fatalf("got:\n%q\nwant:\n%q", got, want)
+	}
+	if strings.Contains(got, "; ") {
+		t.Fatalf("did not expect fields joined with '; ' any more, got: %q", got)
+	}
+}
+
+func TestRenderObject_SingleField_NoContinuationLine(t *testing.T) {
+	got := renderObject(map[string]interface{}{"note": "just one field"})
+	if got != "- Note: just one field" {
+		t.Fatalf("unexpected: %q", got)
+	}
+}
+
+func TestRenderList_MultipleItems_EachOwnBlock_JoinedByNewline(t *testing.T) {
+	items := []interface{}{
+		map[string]interface{}{"obligation": "First"},
+		map[string]interface{}{"obligation": "Second"},
+	}
+	got := renderList(items)
+	want := "- Obligation: First\n- Obligation: Second"
+	if got != want {
+		t.Fatalf("got:\n%q\nwant:\n%q", got, want)
+	}
+}
+
 // TestHumanizeTerminalValue_CoversRealVocabularyAcrossWorkflows proves the one generic
 // SCREAMING_SNAKE_CASE -> sentence transform reads naturally for real terminal values drawn from
 // several different workflows' own vocabularies, including the one with a literal space.

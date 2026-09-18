@@ -109,6 +109,82 @@ func TestSemanticDistinctions_SurviveColor(t *testing.T) {
 	}
 }
 
+// TestRenderWithOptions_ColorTrue_BacktickSpansBolded proves `backtick-delimited` values within a
+// Section body and Next text are emphasized when color is on, with the backticks themselves and
+// every other character left untouched — the one device this package uses for distinguishing
+// commands/paths/identifiers, short of real syntax highlighting.
+func TestRenderWithOptions_ColorTrue_BacktickSpansBolded(t *testing.T) {
+	r := &Report{
+		Outcome:  Success,
+		Summary:  "done",
+		Sections: []Section{{Label: "Working Tree", Body: "Uncommitted changes — `gnomon finalize` may help."}},
+		Next:     "Run `gnomon validate` for details.",
+	}
+	out := RenderWithOptions(r, RenderOptions{Color: true})
+	if !strings.Contains(out, ansiBold+"`gnomon finalize`"+ansiReset) {
+		t.Fatalf("expected the backtick span in the section body bolded, got: %q", out)
+	}
+	if !strings.Contains(out, ansiBold+"`gnomon validate`"+ansiReset) {
+		t.Fatalf("expected the backtick span in Next bolded, got: %q", out)
+	}
+	if stripAnsi(out) != Render(r, false) {
+		t.Fatalf("expected stripping ANSI to reproduce the plain render exactly")
+	}
+}
+
+func TestRenderWithOptions_ColorFalse_BackticksLeftAsIs(t *testing.T) {
+	r := &Report{Outcome: Success, Summary: "done", Sections: []Section{{Label: "X", Body: "run `gnomon status`"}}}
+	out := Render(r, false)
+	if !strings.Contains(out, "`gnomon status`") {
+		t.Fatalf("expected backticks preserved verbatim in plain output, got: %q", out)
+	}
+	if strings.Contains(out, "\033[") {
+		t.Fatalf("did not expect any ANSI in plain output, got: %q", out)
+	}
+}
+
+// --- Palette ---
+
+func TestPalette_ColorDisabled_AllMethodsPassThrough(t *testing.T) {
+	p := NewPalette(false)
+	for name, got := range map[string]string{
+		"Heading": p.Heading("x"),
+		"Good":    p.Good("x"),
+		"Warn":    p.Warn("x"),
+		"Bad":     p.Bad("x"),
+		"Code":    p.Code("x"),
+		"Muted":   p.Muted("x"),
+	} {
+		if got != "x" {
+			t.Errorf("%s: expected color-disabled Palette to pass text through unchanged, got %q", name, got)
+		}
+	}
+}
+
+func TestPalette_ColorEnabled_DistinctCodesPerMethod_AlwaysReset(t *testing.T) {
+	p := NewPalette(true)
+	cases := map[string]struct{ got, want string }{
+		"Heading": {p.Heading("x"), ansiBold + ansiCyan + "x" + ansiReset},
+		"Good":    {p.Good("x"), ansiGreen + "x" + ansiReset},
+		"Warn":    {p.Warn("x"), ansiYellow + "x" + ansiReset},
+		"Bad":     {p.Bad("x"), ansiRed + "x" + ansiReset},
+		"Code":    {p.Code("x"), ansiBold + "x" + ansiReset},
+		"Muted":   {p.Muted("x"), ansiDim + "x" + ansiReset},
+	}
+	for name, c := range cases {
+		if c.got != c.want {
+			t.Errorf("%s: got %q, want %q", name, c.got, c.want)
+		}
+	}
+}
+
+func TestPalette_EmptyString_NeverWrapped(t *testing.T) {
+	p := NewPalette(true)
+	if got := p.Good(""); got != "" {
+		t.Fatalf("expected an empty string to remain empty even with color enabled, got %q", got)
+	}
+}
+
 func stripAnsi(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {

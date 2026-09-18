@@ -266,6 +266,72 @@ func TestNext_CleanWorkingTree_NoFinalizeSuggestion(t *testing.T) {
 	}
 }
 
+// TestNext_NotAGitRepository_SpecGuidanceStillProduced_GitFinalizationNotApplicable is the
+// dogfooding regression: an initialized Gnomon project that is not (yet) a Git repository must
+// still receive full Specification guidance from `gnomon next` — Git is a capability Git-related
+// guidance uses, not a prerequisite for Specification lifecycle inspection.
+func TestNext_NotAGitRepository_SpecGuidanceStillProduced_GitFinalizationNotApplicable(t *testing.T) {
+	root := t.TempDir()
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Next(root)
+	if err != nil {
+		t.Fatalf("expected a non-Git project to still produce Next guidance, got: %v", err)
+	}
+	if report.Outcome != present.Success {
+		t.Fatalf("expected Success, got %v", report.Outcome)
+	}
+	rendered := present.Render(report, false)
+	if !strings.Contains(rendered, "gnomon run specification-definition SPEC-001") || !strings.Contains(rendered, "gnomon approve SPEC-001") {
+		t.Fatalf("expected ordinary Draft Specification guidance despite no Git repository: %s", rendered)
+	}
+	if !strings.Contains(rendered, "Not a Git repository") || !strings.Contains(rendered, "Git Finalization is not applicable") {
+		t.Fatalf("expected an explicit, concise statement that Git Finalization is not applicable: %s", rendered)
+	}
+}
+
+// TestNext_UnexpectedGitFailure_PreservesSpecGuidance_NotMisclassifiedAsNoRepo proves a genuinely
+// unexpected Git failure is reported distinctly from "not a repository" and does not discard the
+// Specification guidance already derived.
+func TestNext_UnexpectedGitFailure_PreservesSpecGuidance_NotMisclassifiedAsNoRepo(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+	// Corrupt the index so `git rev-parse --git-dir` still succeeds (it is still a Git
+	// repository) but `git status` fails for a reason that is NOT "not a repository".
+	if err := os.WriteFile(filepath.Join(root, ".git", "index"), []byte("garbage not an index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Next(root)
+	if err == nil {
+		t.Fatalf("expected an unexpected Git failure to be reported as an error")
+	}
+	if report == nil {
+		t.Fatalf("expected a Report to still be returned despite the Git failure")
+	}
+	rendered := present.Render(report, false)
+	if !strings.Contains(rendered, "gnomon run specification-definition SPEC-001") {
+		t.Fatalf("expected Specification guidance to survive an unexpected Git failure: %s", rendered)
+	}
+	if strings.Contains(rendered, "Not a Git repository") {
+		t.Fatalf("did not expect an unexpected Git failure to be misclassified as 'not a Git repository': %s", rendered)
+	}
+	if strings.Contains(err.Error(), "exit status 128") && !strings.Contains(err.Error(), ":") {
+		t.Fatalf("expected a real diagnostic, not a bare exit code: %v", err)
+	}
+}
+
 func TestNext_UnsupportedContractVersion_RefusesAndPointsAtValidate(t *testing.T) {
 	root := t.TempDir()
 	configureGitIdentity(t, root)

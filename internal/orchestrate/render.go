@@ -114,10 +114,12 @@ func renderList(items []interface{}) string {
 	return strings.Join(lines, "\n")
 }
 
-// renderObject renders one object (e.g. one finding, one obligation) as a single labeled line.
-// Its own fields are sorted alphabetically — unlike the top-level payload, an array item's shape
-// comes from the schema's `items`, not `properties`, so there is no declared top-level order to
-// draw on here.
+// renderObject renders one object (e.g. one finding, one obligation) as a small indented block:
+// a leading "- " bullet on its first field, every other field on its own continuation line below
+// it — so a list of several findings or evidence entries reads as a sequence of clearly separated
+// items rather than one dense, semicolon-joined line each. Its own fields are sorted
+// alphabetically — unlike the top-level payload, an array item's shape comes from the schema's
+// `items`, not `properties`, so there is no declared top-level order to draw on here.
 func renderObject(obj map[string]interface{}) string {
 	keys := make([]string, 0, len(obj))
 	for k := range obj {
@@ -125,18 +127,33 @@ func renderObject(obj map[string]interface{}) string {
 	}
 	sort.Strings(keys)
 
-	var parts []string
+	var lines []string
 	for _, k := range keys {
 		val := renderFieldValue(obj[k])
 		if val == "" {
 			continue
 		}
-		parts = append(parts, fmt.Sprintf("%s: %s", humanizeFieldName(k), val))
+		lines = append(lines, fmt.Sprintf("%s: %s", humanizeFieldName(k), val))
 	}
-	if len(parts) == 0 {
+	if len(lines) == 0 {
 		return ""
 	}
-	return "- " + strings.Join(parts, "; ")
+
+	var b strings.Builder
+	b.WriteString("- ")
+	b.WriteString(indentContinuation(lines[0]))
+	for _, l := range lines[1:] {
+		b.WriteString("\n    ")
+		b.WriteString(indentContinuation(l))
+	}
+	return b.String()
+}
+
+// indentContinuation aligns any embedded newline within a single field's own rendered value (a
+// multi-line string field, say) under the 4-space continuation indent renderObject otherwise only
+// applies between fields — so a field's internal line breaks never dedent back to column zero.
+func indentContinuation(s string) string {
+	return strings.ReplaceAll(s, "\n", "\n    ")
 }
 
 // humanizeFieldName turns a snake_case schema field name into a Title Case label — the one place

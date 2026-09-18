@@ -70,20 +70,29 @@ func Status(root string) (*present.Report, error) {
 		specBody = strings.Join(specLines, "\n")
 	}
 
-	changed, err := gitutil.HasChanges(root)
-	if err != nil {
-		return nil, err
-	}
-	treeBody := "clean — no uncommitted changes"
-	if changed {
-		treeBody = "uncommitted changes present"
-	}
-
 	rep := &present.Report{
 		Outcome: present.Success,
 		Summary: fmt.Sprintf("Initialized, contract v%s, %d Specification(s)", v, len(ids)),
 	}
 	rep.AddSection("Specifications", specBody)
-	rep.AddSection("Working Tree", treeBody)
+
+	gitStatus, gitErr := gitutil.Inspect(root)
+	switch {
+	case gitErr != nil:
+		// Git is a capability Git-related guidance uses, not a prerequisite for Specification
+		// state — an unexpected Git failure degrades this section, it does not discard the
+		// Specification state already reported above.
+		rep.Outcome = present.Failed
+		rep.AddSection("Working Tree", fmt.Sprintf("Git state could not be inspected: %s. Specification state above is unaffected.", gitErr))
+		rep.Next = "Investigate the Git error above, then retry."
+		return rep, gitErr
+	case !gitStatus.Available:
+		rep.AddSection("Working Tree", "not a Git repository — Git Finalization is not applicable here")
+	case gitStatus.Changed:
+		rep.AddSection("Working Tree", "uncommitted changes present")
+	default:
+		rep.AddSection("Working Tree", "clean — no uncommitted changes")
+	}
+
 	return rep, nil
 }
