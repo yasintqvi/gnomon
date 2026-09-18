@@ -3,3 +3,6 @@
 # The built gnomon CLI binary, when built at the repository root (go build -o gnomon ./cmd/gnomon).
 # Anchored to the root only — this must never match cmd/gnomon/ or any other nested path.
 /gnomon
+
+# GoReleaser's local output directory (goreleaser release/build --snapshot, goreleaser check).
+/dist/

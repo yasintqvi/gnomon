@@ -1,0 +1,87 @@
+name: release
+
+# Runs only for release tags (e.g. v1.0.0) — never on ordinary pushes/PRs. GitHub Actions' tag
+# filter is a glob, not a real SemVer regex, so this is an approximation of "vMAJOR.MINOR.PATCH"
+# rather than strict validation; it's deliberately not stricter than that to avoid brittleness.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# The GITHUB_TOKEN GoReleaser uses below only needs to publish a Release and its assets on this
+# repository — nothing else. No PAT or custom secret is required for this v1 release model.
+permissions:
+  contents: write
+
+jobs:
+  # Real runtime verification, not just cross-compilation: builds natively on each runner OS
+  # (with the same -X main.version=<tag> ldflag GoReleaser itself uses) and actually executes
+  # `gnomon --version`, asserting the tag appears in its output. This only reaches one native
+  # arch per OS (macos-latest is arm64, ubuntu-latest/windows-latest are amd64 on GitHub-hosted
+  # runners) — darwin/amd64, linux/arm64, and windows/arm64 are still cross-compiled-only by
+  # goreleaser below, never natively executed here. Gates the release: if a platform's binary
+  # can't even start, nothing gets published.
+  smoke-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build for this runner's native platform
+        shell: bash
+        run: go build -ldflags "-s -w -X main.version=${{ github.ref_name }}" -o gnomon-smoke${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/gnomon
+
+      - name: Run gnomon --version (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$(./gnomon-smoke --version)"
+          echo "$out"
+          echo "$out" | grep -F "${{ github.ref_name }}"
+
+      - name: Run gnomon --version (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $out = & .\gnomon-smoke.exe --version
+          if ($LASTEXITCODE -ne 0) {
+            throw "gnomon --version exited with code $LASTEXITCODE"
+          }
+          Write-Output $out
+          if ($out -notmatch [regex]::Escape("${{ github.ref_name }}")) {
+            throw "version output '$out' did not contain the release tag ${{ github.ref_name }}"
+          }
+
+  goreleaser:
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # GoReleaser's changelog generation reads full Git history, not just the latest commit.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

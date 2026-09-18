@@ -1,0 +1,55 @@
+version: 2
+
+project_name: gnomon
+
+# Gnomon Core (Specifications, Contracts, Workflows) is embedded into the binary at compile time
+# via //go:embed in internal/project/project.go — a release build is self-contained with no extra
+# files or hooks needed beyond an ordinary `go build`.
+builds:
+  - id: gnomon
+    main: ./cmd/gnomon
+    binary: gnomon
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Matches cmd/gnomon/root.go's existing "dev" default and its own documented injection point
+    # (-ldflags "-X main.version=vX.Y.Z"): {{.Tag}} is the literal Git tag (e.g. "v1.0.0"), not
+    # GoReleaser's de-"v"-prefixed {{.Version}}, since `gnomon --version` must report the tag
+    # exactly as released.
+    ldflags:
+      - -s -w -X main.version={{ .Tag }}
+
+archives:
+  - id: gnomon
+    ids: [gnomon]
+    # macOS/Linux ship as .tar.gz; Windows overrides to .zip below — GoReleaser also appends .exe
+    # to the built binary automatically for goos: windows, so files: LICENSE here is all that
+    # needs stating explicitly on either platform.
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # e.g. gnomon_1.0.0_darwin_arm64.tar.gz, gnomon_1.0.0_windows_amd64.zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+changelog:
+  use: git
+  sort: asc
+
+release:
+  # owner/name are left for GoReleaser to detect from the origin remote, rather than hardcoded
+  # here, so this config never drifts from wherever the repository actually lives.
+  prerelease: auto
