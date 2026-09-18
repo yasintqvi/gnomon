@@ -354,6 +354,21 @@ func TestNext_NeverExecutesAWorkflow(t *testing.T) {
 	}
 }
 
+// TestNext_NeverMentionsDescribeOrBootstrap guards against next's scope growing to include
+// always-valid workflows, which carry no state-dependent information.
+func TestNext_NeverMentionsDescribeOrBootstrap(t *testing.T) {
+	root := setupApprovedSpec(t)
+
+	report, err := Next(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := present.Render(report, false)
+	if strings.Contains(rendered, "describe") || strings.Contains(rendered, "bootstrap") {
+		t.Fatalf("expected next to never mention describe/bootstrap, got: %s", rendered)
+	}
+}
+
 func TestNext_DiffersFromRun_NeverAcceptsAWorkflowIdentityArgument(t *testing.T) {
 	// This is a structural/behavioral distinction, not a syntax one (covered in cmd/gnomon):
 	// Next's own signature takes only a project root — it has no way to be pointed at a specific

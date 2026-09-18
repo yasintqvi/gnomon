@@ -30,7 +30,7 @@ git clone <this-repository-url>
 cd gnomon
 go build -o gnomon ./cmd/gnomon
 ./gnomon --version
-````
+```
 
 *(No package manager, curl installer, or prebuilt binary exists yet — that's not a documentation gap, it genuinely isn't built.)*
 
@@ -40,10 +40,13 @@ In an existing project — any existing project, Gnomon doesn't care what's alre
 $ gnomon init
 ✓ Gnomon project initialized
 
-→ gnomon spec create "<title>"
+→ gnomon describe
+  Establish or reconcile project knowledge before starting work.
 ```
 
 That materializes a `.gnomon/` directory: a template Specification, the Draft/Approved lifecycle rules, the ten built-in workflows (Implementation, Testing, Verification, Review, and so on), and a version marker. Nothing else in your repository is touched. If you never run another `gnomon` command, this did nothing to your codebase.
+
+`gnomon describe` (Initial Knowledge Establishment) reads whatever intent you give it *together with* whatever's already in the repository — existing code, config, docs — and reconciles the two into approved `PROJECT.md`/`DOMAIN.md`/`ARCHITECTURE.md`/`STACK.md`/`CONVENTIONS.md` content; it does not assume the project is empty, so it's equally useful for a brand-new project and for a first-time adoption of an existing one. `gnomon bootstrap` then establishes the verified baseline from that knowledge. This is recommended, not enforced — nothing downstream requires either to have run, so going straight to `spec create` is a legitimate choice if this project's knowledge is already accurate. The walkthrough below does exactly that, since that's the more common case for a project with established conventions; if you're starting from nothing, run `gnomon describe` then `gnomon bootstrap` first and each will point you to the next step.
 
 ## Choosing an Agent
 
@@ -245,17 +248,17 @@ gnomon --help
 gnomon <command> --help
 ```
 
-| Group                 | Commands                                                                                                 |         |
-| --------------------- | -------------------------------------------------------------------------------------------------------- | ------- |
-| Project               | `init`, `describe`, `bootstrap`                                                                          |         |
-| Specification         | `spec discover`, `spec create <title>`, `spec define <SPEC-id>`, `approve <SPEC-id>`, `revoke <SPEC-id>` |         |
-| Engineering           | `implement <SPEC-id>`, `test [SPEC-id]`, `verify [target]`, `review [target]`, `finalize`                |         |
-| Guidance / Inspection | `status`, `validate`, `next`                                                                             |         |
-| Advanced              | `run <workflow-identity> [target]`, `agent`, `agent set-default <claude                                  | codex>` |
+| Group | Commands |
+|---|---|
+| Project | `init`, `describe`, `bootstrap` |
+| Specification | `spec discover`, `spec create <title>`, `spec define <SPEC-id>`, `approve <SPEC-id>`, `revoke <SPEC-id>` |
+| Engineering | `implement <SPEC-id>`, `test [SPEC-id]`, `verify [target]`, `review [target]`, `finalize` |
+| Guidance / Inspection | `status`, `validate`, `next` |
+| Advanced | `run <workflow-identity> [target]`, `agent`, `agent set-default <claude/codex>` |
 
 A few worth knowing about before you need them:
 
-* **`describe` / `bootstrap`** matter for a brand-new project with no established `PROJECT.md`/`ARCHITECTURE.md`/etc. yet — `describe` captures that initial knowledge, `bootstrap` establishes the verified baseline from it. An existing project (like the walkthrough above) may never need either.
+* **`describe` / `bootstrap`** are the recommended first step after `init` — for a brand-new project and for first-time adoption of an existing one alike, since `describe`'s own first step reads whatever's already in the repository rather than assuming it's empty. Recommended, never enforced: if your project's knowledge is already accurate, going straight to `spec create` (as the walkthrough above does) is equally legitimate.
 * **`validate`** is a different question from `status`: not "what state is my project in" but "is the Gnomon structure itself intact" — Contract well-formedness, evidence file shape, duplicate identities. Clean pass/fail, meant for CI.
 * **`run <identity> [target]`** is the generic escape hatch — it invokes any workflow by its own declared identity, including a project's own custom workflows, through the exact same engine the dedicated commands use. Ordinary work should use the dedicated command; `run` exists for the cases that don't have one.
 

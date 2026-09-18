@@ -69,7 +69,9 @@ func Implement(root, specID, agentOverride string, chooser AgentChooser) (*prese
 // workflow. It takes no target: the Contract declares specification_reference: none, and Core's
 // text never names any Specification this workflow depends on.
 func Describe(root, agentOverride string, chooser AgentChooser) (*present.Report, error) {
-	return runNoTargetWorkflow(root, "initial-knowledge-establishment.md", agentOverride, chooser)
+	rep, err := runNoTargetWorkflow(root, "initial-knowledge-establishment.md", agentOverride, chooser)
+	onboardingNext(rep, "gnomon bootstrap")
+	return rep, err
 }
 
 // Bootstrap performs `gnomon bootstrap`, wired directly to workflows/bootstrap.md — a distinct
@@ -77,7 +79,18 @@ func Describe(root, agentOverride string, chooser AgentChooser) (*present.Report
 // prose assumes Initial Knowledge Establishment's baseline already exists, and neither one's
 // responsibility is folded into the other here.
 func Bootstrap(root, agentOverride string, chooser AgentChooser) (*present.Report, error) {
-	return runNoTargetWorkflow(root, "bootstrap.md", agentOverride, chooser)
+	rep, err := runNoTargetWorkflow(root, "bootstrap.md", agentOverride, chooser)
+	onboardingNext(rep, `gnomon spec create "<title>", or gnomon spec discover to have an Agent propose one`)
+	return rep, err
+}
+
+// onboardingNext sets Next to onSuccess only on a Success Outcome. Describe and Bootstrap's
+// Result Contracts each declare exactly one success terminal value, so Success here is never
+// ambiguous about which one occurred.
+func onboardingNext(rep *present.Report, onSuccess string) {
+	if rep != nil && rep.Outcome == present.Success {
+		rep.Next = onSuccess
+	}
 }
 
 // Finalize performs `gnomon finalize`, wired directly to workflows/git-finalization.md. It takes

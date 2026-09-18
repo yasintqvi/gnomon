@@ -3,6 +3,7 @@ package orchestrate
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gnomon/internal/adapter"
@@ -41,6 +42,131 @@ func TestDescribe_MapsToInitialKnowledgeEstablishment(t *testing.T) {
 	}
 	if report.Summary != "Ready for bootstrap" {
 		t.Fatalf("unexpected summary: %q", report.Summary)
+	}
+}
+
+// --- Onboarding guidance (Init -> describe -> bootstrap -> Specification work) ---
+
+func TestOnboardingNext_SetsNextOnlyOnSuccess(t *testing.T) {
+	success := &present.Report{Outcome: present.Success}
+	onboardingNext(success, "gnomon bootstrap")
+	if success.Next != "gnomon bootstrap" {
+		t.Fatalf("expected Next to be set on a Success report, got %q", success.Next)
+	}
+
+	for _, outcome := range []present.Outcome{present.Blocked, present.Cancelled, present.Failed} {
+		rep := &present.Report{Outcome: outcome}
+		onboardingNext(rep, "gnomon bootstrap")
+		if rep.Next != "" {
+			t.Fatalf("expected Next to remain empty for Outcome %v, got %q", outcome, rep.Next)
+		}
+	}
+
+	// A nil report (the shape prepareWorkflow's own early-return errors produce) must never panic.
+	onboardingNext(nil, "gnomon bootstrap")
+}
+
+func TestInit_RecommendsDescribeAsFirstStep(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+
+	report, err := Init(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(report.Next, "gnomon describe") {
+		t.Fatalf("expected Init's Next to recommend describe, got %q", report.Next)
+	}
+	if strings.Contains(report.Next, "spec create") {
+		t.Fatalf("did not expect Init's Next to list spec create as an alternative, got %q", report.Next)
+	}
+}
+
+func TestDescribe_FailedAgentResolution_NeverGetsSuccessNext(t *testing.T) {
+	sandboxAgentConfig(t)
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Describe(root, "not-a-real-provider", nil)
+	if err == nil {
+		t.Fatalf("expected an invalid --agent override to be refused")
+	}
+	if report == nil || report.Outcome != present.Failed {
+		t.Fatalf("expected a Failed report, got: %+v", report)
+	}
+	if report.Next == "gnomon bootstrap" {
+		t.Fatalf("did not expect the success-only 'gnomon bootstrap' suggestion on a Failed result")
+	}
+}
+
+func TestBootstrap_FailedAgentResolution_NeverGetsSuccessNext(t *testing.T) {
+	sandboxAgentConfig(t)
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Bootstrap(root, "not-a-real-provider", nil)
+	if err == nil {
+		t.Fatalf("expected an invalid --agent override to be refused")
+	}
+	if report == nil || report.Outcome != present.Failed {
+		t.Fatalf("expected a Failed report, got: %+v", report)
+	}
+	if strings.Contains(report.Next, "spec create") {
+		t.Fatalf("did not expect the success-only spec-create suggestion on a Failed result, got %q", report.Next)
+	}
+}
+
+func TestDescribe_SuccessfulResult_RecommendsBootstrap(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	l, wf, workflowPath, err := prepareWorkflow(root, "initial-knowledge-establishment.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scripted := &payloadAdapter{
+		FakeAdapter: &adapter.FakeAdapter{},
+		Payload:     map[string]interface{}{"outcome": "READY_FOR_BOOTSTRAP", "recorded_knowledge": "PROJECT.md updated"},
+	}
+	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetNone, "", scripted)
+	if err != nil {
+		t.Fatalf("describe: %v (report: %+v)", err, report)
+	}
+	onboardingNext(report, "gnomon bootstrap")
+	if report.Next != "gnomon bootstrap" {
+		t.Fatalf("expected a successful describe result to recommend gnomon bootstrap, got %q", report.Next)
+	}
+}
+
+func TestBootstrap_SuccessfulResult_RecommendsSpecWork(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	l, wf, workflowPath, err := prepareWorkflow(root, "bootstrap.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scripted := &payloadAdapter{
+		FakeAdapter: &adapter.FakeAdapter{},
+		Payload:     map[string]interface{}{"outcome": "BOOTSTRAP_COMPLETE", "baseline_established": "scaffolded"},
+	}
+	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetNone, "", scripted)
+	if err != nil {
+		t.Fatalf("bootstrap: %v (report: %+v)", err, report)
+	}
+	onboardingNext(report, `gnomon spec create "<title>", or gnomon spec discover to have an Agent propose one`)
+	if !strings.Contains(report.Next, "gnomon spec create") || !strings.Contains(report.Next, "gnomon spec discover") {
+		t.Fatalf("expected a successful bootstrap result to recommend both ways to start Specification work, got %q", report.Next)
 	}
 }
 

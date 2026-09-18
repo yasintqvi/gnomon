@@ -20,7 +20,7 @@ func Init(root string) (*present.Report, error) {
 	return &present.Report{
 		Outcome: present.Success,
 		Summary: "Gnomon project initialized",
-		Next:    `gnomon spec create "<title>"`,
+		Next:    "gnomon describe\n  Establish or reconcile project knowledge before starting work.",
 		Detail:  []string{fmt.Sprintf("root: %s", root), fmt.Sprintf("contract version: %s", v)},
 	}, nil
 }
