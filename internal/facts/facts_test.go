@@ -80,7 +80,7 @@ func TestEligible_RequiresApproval_ApprovedSpec_Eligible(t *testing.T) {
 	content := "# SPEC-004 — X\n\nsome content\n"
 	writeSpec(t, l, "SPEC-004-x.md", content)
 	fp := approval.Fingerprint([]byte(content))
-	if err := approval.WriteGrant(l.ApprovalsDir(), "SPEC-004", fp, "Jane <jane@example.com>"); err != nil {
+	if err := approval.WriteGrant(l.ApprovalsDir(), "SPEC-004", fp, "Jane <jane@example.com>", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
 	wf := contract.Workflow{SpecificationReference: contract.SpecReferenceRequired, RequiresApprovedSpecification: true}
@@ -98,7 +98,7 @@ func TestEligible_ManualEditAfterApproval_RevertsToDraft(t *testing.T) {
 	original := "# SPEC-004 — X\n\nsome content\n"
 	writeSpec(t, l, "SPEC-004-x.md", original)
 	fp := approval.Fingerprint([]byte(original))
-	if err := approval.WriteGrant(l.ApprovalsDir(), "SPEC-004", fp, "Jane <jane@example.com>"); err != nil {
+	if err := approval.WriteGrant(l.ApprovalsDir(), "SPEC-004", fp, "Jane <jane@example.com>", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
 

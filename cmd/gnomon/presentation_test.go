@@ -62,11 +62,16 @@ func TestRoot_HelpListsFullCommandSurface(t *testing.T) {
 	out := captureOutput(t, []string{"--help"})
 	for _, name := range []string{
 		"init", "describe", "bootstrap", "spec", "approve", "revoke",
-		"implement", "test", "verify", "review", "finalize",
 		"status", "validate", "next", "run", "agent",
 	} {
 		if !strings.Contains(out, name) {
 			t.Errorf("expected --help to list %q somewhere in the command surface", name)
+		}
+	}
+	removed := map[string]bool{"implement": true, "test": true, "verify": true, "review": true, "finalize": true}
+	for _, c := range rootCmd.Commands() {
+		if removed[c.Name()] {
+			t.Errorf("did not expect %q to remain a registered top-level command", c.Name())
 		}
 	}
 }
@@ -86,8 +91,6 @@ func TestRoot_CommandGrouping_MatchesDesignedCategories(t *testing.T) {
 	want := map[string]string{
 		"init": groupProject, "describe": groupProject, "bootstrap": groupProject,
 		"spec": groupSpecification, "approve": groupSpecification, "revoke": groupSpecification,
-		"implement": groupEngineering, "test": groupEngineering, "verify": groupEngineering,
-		"review": groupEngineering, "finalize": groupEngineering,
 		"status": groupGuidance, "validate": groupGuidance, "next": groupGuidance,
 		"run": groupAdvanced, "agent": groupAdvanced,
 	}
@@ -152,7 +155,7 @@ func TestVersion_DefaultsToDev_NeverHardcodedRelease(t *testing.T) {
 // --- Args error presentation (item 7) ---
 
 func TestArgsErrors_NameWhatIsExpected_NotRawCobraCount(t *testing.T) {
-	err := implementCmd.Args(implementCmd, nil)
+	err := revokeCmd.Args(revokeCmd, nil)
 	if err == nil {
 		t.Fatalf("expected an error for a missing required argument")
 	}
@@ -166,10 +169,10 @@ func TestArgsErrors_NameWhatIsExpected_NotRawCobraCount(t *testing.T) {
 
 func TestArgsErrors_StillEnforceTheSameArity(t *testing.T) {
 	// requireArgs must never change accept/reject behavior, only the message.
-	if err := implementCmd.Args(implementCmd, []string{"SPEC-001"}); err != nil {
+	if err := revokeCmd.Args(revokeCmd, []string{"SPEC-001"}); err != nil {
 		t.Fatalf("expected exactly one arg to still be accepted: %v", err)
 	}
-	if err := implementCmd.Args(implementCmd, []string{"SPEC-001", "extra"}); err == nil {
+	if err := revokeCmd.Args(revokeCmd, []string{"SPEC-001", "extra"}); err == nil {
 		t.Fatalf("expected more than one arg to still be refused")
 	}
 	if err := runCmd.Args(runCmd, []string{"identity"}); err != nil {
@@ -214,8 +217,11 @@ func TestRun_HelpText_MarksItselfAdvanced(t *testing.T) {
 		t.Fatalf("expected run's Short description to mark it as the advanced/generic path, got: %q", runCmd.Short)
 	}
 	out := captureOutput(t, []string{"run", "--help"})
-	if !strings.Contains(out, "implement") {
-		t.Fatalf("expected run's help to name the dedicated commands ordinary users should prefer: %s", out)
+	if !strings.Contains(out, "gnomon spec") {
+		t.Fatalf("expected run's help to point at gnomon spec as the everyday interface: %s", out)
+	}
+	if !strings.Contains(out, "implementation") {
+		t.Fatalf("expected run's help to show a worked example identity: %s", out)
 	}
 	if runCmd.GroupID != groupAdvanced {
 		t.Fatalf("expected run grouped under Advanced, got %q", runCmd.GroupID)

@@ -50,7 +50,7 @@ func Approve(root, specID string, prompt PromptFunc) (*present.Report, error) {
 		identity = strings.TrimSpace(answer)
 	}
 
-	if err := approval.WriteGrant(l.ApprovalsDir(), specID, fingerprint, identity); err != nil {
+	if err := approval.WriteGrant(l.ApprovalsDir(), specID, fingerprint, identity, content); err != nil {
 		return nil, err
 	}
 

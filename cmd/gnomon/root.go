@@ -26,7 +26,6 @@ var verbose bool
 const (
 	groupProject       = "project"
 	groupSpecification = "specification"
-	groupEngineering   = "engineering"
 	groupGuidance      = "guidance"
 	groupAdvanced      = "advanced"
 )
@@ -54,7 +53,6 @@ func init() {
 	rootCmd.AddGroup(
 		&cobra.Group{ID: groupProject, Title: "Project:"},
 		&cobra.Group{ID: groupSpecification, Title: "Specification:"},
-		&cobra.Group{ID: groupEngineering, Title: "Engineering:"},
 		&cobra.Group{ID: groupGuidance, Title: "Guidance / Inspection:"},
 		&cobra.Group{ID: groupAdvanced, Title: "Advanced:"},
 	)

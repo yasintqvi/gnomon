@@ -2,10 +2,11 @@ package main
 
 import "testing"
 
-// TestSlice2Commands_AreRegistered proves gnomon describe/bootstrap/verify/review/finalize are
-// real, registered Cobra commands, not merely orchestrate-package functions nothing wires up.
-func TestSlice2Commands_AreRegistered(t *testing.T) {
-	want := []string{"describe", "bootstrap", "verify", "review", "finalize"}
+// TestProjectCommands_AreRegistered proves gnomon describe/bootstrap remain real, registered
+// Cobra commands — project setup is out of scope for the Specification-centered CLI redesign and
+// is untouched by it.
+func TestProjectCommands_AreRegistered(t *testing.T) {
+	want := []string{"describe", "bootstrap"}
 	got := map[string]bool{}
 	for _, c := range rootCmd.Commands() {
 		got[c.Name()] = true
@@ -17,46 +18,23 @@ func TestSlice2Commands_AreRegistered(t *testing.T) {
 	}
 }
 
-// TestSlice2Commands_HaveAgentFlag proves every Agent-invoking command in this slice accepts the
-// shared --agent override registered the same way implement's already does.
-func TestSlice2Commands_HaveAgentFlag(t *testing.T) {
-	agentInvoking := map[string]bool{"describe": true, "bootstrap": true, "verify": true, "review": true, "finalize": true}
-	for _, c := range rootCmd.Commands() {
-		if !agentInvoking[c.Name()] {
-			continue
-		}
-		if c.Flags().Lookup("agent") == nil {
-			t.Fatalf("expected %q to register the shared --agent flag", c.Name())
-		}
-	}
-}
-
-// TestSlice2Commands_VerifyAndReviewAcceptOptionalTarget confirms verify/review's arity — an
-// optional, single, generic target argument — matching cli/COMMAND_SURFACE.md's `verify [target]`
-// / `review [target]`.
-func TestSlice2Commands_VerifyAndReviewAcceptOptionalTarget(t *testing.T) {
-	for _, name := range []string{"verify", "review"} {
+// TestProjectCommands_HaveAgentFlag confirms describe/bootstrap still accept --agent.
+func TestProjectCommands_HaveAgentFlag(t *testing.T) {
+	for _, name := range []string{"describe", "bootstrap"} {
 		for _, c := range rootCmd.Commands() {
 			if c.Name() != name {
 				continue
 			}
-			if err := c.Args(c, nil); err != nil {
-				t.Fatalf("%s: expected zero args to be accepted (target is optional), got: %v", name, err)
-			}
-			if err := c.Args(c, []string{"one"}); err != nil {
-				t.Fatalf("%s: expected exactly one arg to be accepted, got: %v", name, err)
-			}
-			if err := c.Args(c, []string{"one", "two"}); err == nil {
-				t.Fatalf("%s: expected more than one arg to be refused", name)
+			if c.Flags().Lookup("agent") == nil {
+				t.Fatalf("expected %q to register the shared --agent flag", name)
 			}
 		}
 	}
 }
 
-// TestSlice2Commands_NoTargetCommandsRejectArgs confirms describe/bootstrap/finalize take no
-// arguments at all, matching cli/COMMAND_SURFACE.md's bare `describe`/`bootstrap`/`finalize`.
-func TestSlice2Commands_NoTargetCommandsRejectArgs(t *testing.T) {
-	for _, name := range []string{"describe", "bootstrap", "finalize"} {
+// TestProjectCommands_RejectArgs confirms describe/bootstrap still take no arguments.
+func TestProjectCommands_RejectArgs(t *testing.T) {
+	for _, name := range []string{"describe", "bootstrap"} {
 		for _, c := range rootCmd.Commands() {
 			if c.Name() != name {
 				continue
@@ -71,17 +49,37 @@ func TestSlice2Commands_NoTargetCommandsRejectArgs(t *testing.T) {
 	}
 }
 
-// TestSlice2Commands_ScopeBoundary confirms none of the commands out of scope for Slice 2 were
-// accidentally registered as a side effect of that slice's work. "test", "spec
-// discover"/"spec define", "revoke", "validate"/"run", and "status"/"next" were correctly out of
-// scope for Slice 2 specifically and are no longer listed here — later slices legitimately add
-// them; see TestSlice3Commands_ScopeBoundary, TestSlice4Commands_ScopeBoundary,
-// TestSlice5Commands_ScopeBoundary, and TestSlice6Commands_ScopeBoundary.
-func TestSlice2Commands_ScopeBoundary(t *testing.T) {
-	outOfScope := map[string]bool{}
+// TestWorkflowCommands_NoLongerRegisteredAsTopLevel proves implement/test/verify/review/finalize
+// (and spec discover/spec define) have no dedicated top-level command: each is a Contract-driven
+// Agent workflow with no Human-exclusive or non-Contract-representable operation of its own, so
+// each is reachable only through gnomon run <identity> [target] (advanced/non-interactive) or as
+// a contextual action inside gnomon spec <SPEC-id> (everyday/interactive) — never through both a
+// dedicated command and run at once.
+func TestWorkflowCommands_NoLongerRegisteredAsTopLevel(t *testing.T) {
+	removed := map[string]bool{
+		"implement": true, "test": true, "verify": true, "review": true, "finalize": true,
+	}
 	for _, c := range rootCmd.Commands() {
-		if outOfScope[c.Name()] {
-			t.Fatalf("did not expect %q to be registered — out of scope for this slice", c.Name())
+		if removed[c.Name()] {
+			t.Fatalf("did not expect %q to remain a dedicated top-level command; it is reachable via gnomon run", c.Name())
+		}
+	}
+	for _, sub := range specCmd.Commands() {
+		if sub.Name() == "discover" || sub.Name() == "define" {
+			t.Fatalf("did not expect gnomon spec %s to remain registered; it is reachable via gnomon run", sub.Name())
+		}
+	}
+}
+
+// TestWorkflowCommands_ReachableViaRun confirms the built-in identity each removed command used
+// to wrap is still a valid gnomon run target — the capability was relocated, not lost.
+func TestWorkflowCommands_ReachableViaRun(t *testing.T) {
+	for _, identity := range []string{
+		"implementation", "testing", "verification", "review", "git-finalization",
+		"specification-discovery", "specification-definition",
+	} {
+		if err := runCmd.Args(runCmd, []string{identity}); err != nil {
+			t.Fatalf("expected gnomon run %s to be a syntactically valid invocation, got: %v", identity, err)
 		}
 	}
 }

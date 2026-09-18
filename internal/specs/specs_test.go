@@ -42,13 +42,13 @@ func TestList_EmptyDir_ExcludesTemplate(t *testing.T) {
 
 func TestList_ReturnsAllIdentitiesInOrder(t *testing.T) {
 	dir := setupSpecsDir(t)
-	if _, err := CreateDraft(dir, "SPEC-002", "Second"); err != nil {
+	if _, err := CreateDraft(dir, "SPEC-002", "Second", Slugify("Second")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateDraft(dir, "SPEC-001", "First"); err != nil {
+	if _, err := CreateDraft(dir, "SPEC-001", "First", Slugify("First")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateDraft(dir, "SPEC-003", "Third"); err != nil {
+	if _, err := CreateDraft(dir, "SPEC-003", "Third", Slugify("Third")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -117,7 +117,7 @@ func TestExists(t *testing.T) {
 
 func TestCreateDraft_SubstitutesOnlyIdentityAndTitle(t *testing.T) {
 	dir := setupSpecsDir(t)
-	path, err := CreateDraft(dir, "SPEC-004", "Password Reset")
+	path, err := CreateDraft(dir, "SPEC-004", "Password Reset", Slugify("Password Reset"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,10 +142,40 @@ func TestCreateDraft_SubstitutesOnlyIdentityAndTitle(t *testing.T) {
 
 func TestCreateDraft_RefusesToOverwriteExisting(t *testing.T) {
 	dir := setupSpecsDir(t)
-	if _, err := CreateDraft(dir, "SPEC-004", "Password Reset"); err != nil {
+	if _, err := CreateDraft(dir, "SPEC-004", "Password Reset", Slugify("Password Reset")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateDraft(dir, "SPEC-004", "Password Reset"); err == nil {
+	if _, err := CreateDraft(dir, "SPEC-004", "Password Reset", Slugify("Password Reset")); err == nil {
 		t.Fatalf("expected an error when the destination file already exists")
+	}
+}
+
+func TestCreateDraft_RefusesEmptySlug(t *testing.T) {
+	dir := setupSpecsDir(t)
+	if _, err := CreateDraft(dir, "SPEC-004", "Password Reset", ""); err == nil {
+		t.Fatalf("expected an empty slug to be refused")
+	}
+}
+
+func TestSlugify_MechanicalOnly_NoStopWordRemoval(t *testing.T) {
+	// Slugify never applies English-specific stop-word/NLP heuristics — "a" survives verbatim.
+	if got := Slugify("Create a Project"); got != "create-a-project" {
+		t.Fatalf("expected purely mechanical normalization, got %q", got)
+	}
+}
+
+func TestTitle_ExtractsFromHeading(t *testing.T) {
+	content := "# SPEC-001 — Password Reset\n\n## Use Case\n"
+	if got := Title("SPEC-001", []byte(content)); got != "Password Reset" {
+		t.Fatalf("expected extracted title, got %q", got)
+	}
+}
+
+func TestTitle_FallsBackToIdentity_WhenHeadingMissingOrMalformed(t *testing.T) {
+	if got := Title("SPEC-002", []byte("no heading here\n")); got != "SPEC-002" {
+		t.Fatalf("expected fallback to identity, got %q", got)
+	}
+	if got := Title("SPEC-003", []byte("")); got != "SPEC-003" {
+		t.Fatalf("expected fallback to identity for empty content, got %q", got)
 	}
 }

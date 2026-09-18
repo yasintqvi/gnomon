@@ -48,16 +48,16 @@ func TestNext_DraftSpecification_OffersDefineAndApprove_NotImplementOrTest(t *te
 		t.Fatal(err)
 	}
 	rendered := present.Render(report, false)
-	if !strings.Contains(rendered, "gnomon spec define SPEC-001") {
+	if !strings.Contains(rendered, "gnomon run specification-definition SPEC-001") {
 		t.Fatalf("expected Draft guidance to offer spec define, matching cli/COMMAND_SURFACE.md's own worked example: %s", rendered)
 	}
 	if !strings.Contains(rendered, "gnomon approve SPEC-001") {
 		t.Fatalf("expected Draft guidance to also offer approve, without presuming which applies: %s", rendered)
 	}
-	if strings.Contains(rendered, "gnomon implement SPEC-001") {
+	if strings.Contains(rendered, "gnomon run implementation SPEC-001") {
 		t.Fatalf("did not expect implement to be offered for a Draft Specification: %s", rendered)
 	}
-	if strings.Contains(rendered, "gnomon test SPEC-001") {
+	if strings.Contains(rendered, "gnomon run testing SPEC-001") {
 		t.Fatalf("did not expect test to be offered for a Draft, Approved-gated Specification: %s", rendered)
 	}
 }
@@ -70,7 +70,7 @@ func TestNext_ApprovedSpecification_OffersImplementTestRevoke_NotApprove(t *test
 		t.Fatal(err)
 	}
 	rendered := present.Render(report, false)
-	for _, want := range []string{"gnomon implement SPEC-001", "gnomon test SPEC-001", "gnomon revoke SPEC-001", "gnomon spec define SPEC-001"} {
+	for _, want := range []string{"gnomon run implementation SPEC-001", "gnomon run testing SPEC-001", "gnomon revoke SPEC-001", "gnomon run specification-definition SPEC-001"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected Approved guidance to include %q: %s", want, rendered)
 		}
@@ -91,7 +91,7 @@ func TestNext_RevokedApproval_TreatedIdenticallyToOrdinaryDraft(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := present.Render(report, false)
-	if !strings.Contains(rendered, "gnomon spec define SPEC-001") || !strings.Contains(rendered, "gnomon approve SPEC-001") {
+	if !strings.Contains(rendered, "gnomon run specification-definition SPEC-001") || !strings.Contains(rendered, "gnomon approve SPEC-001") {
 		t.Fatalf("expected a revoked (now Draft) Specification to receive ordinary Draft guidance, with no distinct 'revoked' handling invented: %s", rendered)
 	}
 }
@@ -116,7 +116,7 @@ func TestNext_StaleApprovalEvidence_TreatedIdenticallyToOrdinaryDraft(t *testing
 		t.Fatal(err)
 	}
 	rendered := present.Render(report, false)
-	if !strings.Contains(rendered, "gnomon spec define SPEC-001") || !strings.Contains(rendered, "gnomon approve SPEC-001") {
+	if !strings.Contains(rendered, "gnomon run specification-definition SPEC-001") || !strings.Contains(rendered, "gnomon approve SPEC-001") {
 		t.Fatalf("expected stale approval evidence to derive ordinary Draft guidance, no distinct handling invented: %s", rendered)
 	}
 }
@@ -136,7 +136,7 @@ func TestNext_MalformedApprovalEvidence_ExcludedNotFatal(t *testing.T) {
 		t.Fatalf("expected malformed evidence to be excluded, not fatal, to next: %v", err)
 	}
 	rendered := present.Render(report, false)
-	if !strings.Contains(rendered, "gnomon implement SPEC-001") {
+	if !strings.Contains(rendered, "gnomon run implementation SPEC-001") {
 		t.Fatalf("expected the real, valid grant to still be honored: %s", rendered)
 	}
 }
@@ -159,7 +159,7 @@ func TestNext_MultipleDraftSpecifications_AllListedNoneChosen(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := present.Render(report, false)
-	if !strings.Contains(rendered, "gnomon spec define SPEC-001") || !strings.Contains(rendered, "gnomon spec define SPEC-002") {
+	if !strings.Contains(rendered, "gnomon run specification-definition SPEC-001") || !strings.Contains(rendered, "gnomon run specification-definition SPEC-002") {
 		t.Fatalf("expected guidance for both Draft Specifications, no single one chosen: %s", rendered)
 	}
 	if report.Target != "" {
@@ -194,7 +194,7 @@ func TestNext_MultipleApprovedSpecifications_AllListedNoneChosen(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := present.Render(report, false)
-	if !strings.Contains(rendered, "gnomon implement SPEC-001") || !strings.Contains(rendered, "gnomon implement SPEC-002") {
+	if !strings.Contains(rendered, "gnomon run implementation SPEC-001") || !strings.Contains(rendered, "gnomon run implementation SPEC-002") {
 		t.Fatalf("expected guidance for both Approved Specifications, no single one chosen: %s", rendered)
 	}
 }
@@ -223,7 +223,7 @@ func TestNext_MixedDraftAndApproved_BothRepresentedDistinctly(t *testing.T) {
 	if !strings.Contains(rendered, "gnomon approve SPEC-001") {
 		t.Fatalf("expected the Draft Specification's own guidance: %s", rendered)
 	}
-	if !strings.Contains(rendered, "gnomon implement SPEC-002") {
+	if !strings.Contains(rendered, "gnomon run implementation SPEC-002") {
 		t.Fatalf("expected the Approved Specification's own guidance: %s", rendered)
 	}
 }

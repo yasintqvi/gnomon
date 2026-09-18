@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -9,18 +10,42 @@ import (
 )
 
 var specCmd = &cobra.Command{
-	Use:     "spec",
-	Short:   "Create, discover, and define Specifications",
+	Use:     "spec [SPEC-id]",
+	Short:   "Browse and manage Specifications",
 	GroupID: groupSpecification,
-	Long: `Create, discover, and define Specifications.
+	Long: `Browse and manage Specifications.
 
-A Specification is a Draft until a Human explicitly approves it (gnomon approve) —
-Implementation and Testing both require Approved. "spec discover" and "spec create"
-are two ways to get a new Draft; "spec define" brings an existing Draft to a
-reviewable, approval-ready state.`,
-	Example: `  gnomon spec create "Password Reset"
-  gnomon spec discover
-  gnomon spec define SPEC-001`,
+"gnomon spec" opens an interactive browser of every Specification — its lifecycle,
+approval state, and the actions currently valid for it. "gnomon spec SPEC-001" opens
+that one Specification directly. Both require a real interactive terminal.
+
+Every lifecycle action — Define, Approve, Revoke, Implement, Test — is available as a
+contextual action from there; only the ones currently valid for that Specification's
+state can actually be run, and the rest are shown with why not. This is the normal way
+to work with Specifications; there is no separate set of commands to memorize.
+
+"gnomon spec create <title>" below remains available directly for scripting,
+automation, and CI, where an interactive browser cannot run — it is the one
+Specification-related operation with no Workflow Contract for "gnomon run" to invoke.
+Every other lifecycle action has a non-interactive equivalent through
+"gnomon run <workflow-identity> <SPEC-id>" and, for approval itself,
+"gnomon approve"/"gnomon revoke".`,
+	Example: `  gnomon spec
+  gnomon spec SPEC-001`,
+	Args: requireArgs("at most one argument: [SPEC-id]", cobra.MaximumNArgs(1)),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		root, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		if !stdinIsInteractive() {
+			return fmt.Errorf("gnomon spec requires an interactive terminal; for automation, use `gnomon spec create <title>`, `gnomon approve <SPEC-id>`, `gnomon revoke <SPEC-id>`, or `gnomon run <workflow-identity> [target]`")
+		}
+		if len(args) == 1 {
+			return runSpecWorkspace(root, args[0])
+		}
+		return runSpecBrowser(root)
+	},
 }
 
 var specCreateCmd = &cobra.Command{
@@ -37,43 +62,7 @@ var specCreateCmd = &cobra.Command{
 	},
 }
 
-var specDiscoverCmd = &cobra.Command{
-	Use:   "discover",
-	Short: "Propose the next Specification candidate from current project knowledge (Specification Discovery)",
-	Args:  requireArgs("no arguments", cobra.NoArgs),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		root, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-		report, err := orchestrate.SpecDiscover(root, *specDiscoverAgentFlag, agentChooserForInvocation())
-		return renderReport(report, err)
-	},
-}
-
-var specDefineCmd = &cobra.Command{
-	Use:   "define <SPEC-id>",
-	Short: "Bring a Draft Specification to READY_FOR_APPROVAL (Specification Definition)",
-	Args:  requireArgs("<SPEC-id>", cobra.ExactArgs(1)),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		root, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-		report, err := orchestrate.SpecDefine(root, args[0], *specDefineAgentFlag, agentChooserForInvocation())
-		return renderReport(report, err)
-	},
-}
-
-var specDiscoverAgentFlag *string
-var specDefineAgentFlag *string
-
 func init() {
-	specDiscoverAgentFlag = registerAgentFlag(specDiscoverCmd)
-	specDefineAgentFlag = registerAgentFlag(specDefineCmd)
-
 	specCmd.AddCommand(specCreateCmd)
-	specCmd.AddCommand(specDiscoverCmd)
-	specCmd.AddCommand(specDefineCmd)
 	rootCmd.AddCommand(specCmd)
 }

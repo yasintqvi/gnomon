@@ -58,7 +58,7 @@ func TestDerive_NoEvidence_Draft(t *testing.T) {
 func TestDerive_MatchingGrant_Approved(t *testing.T) {
 	dir := t.TempDir()
 	fp := "the-fingerprint"
-	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>"); err != nil {
+	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
 	state, err := Derive(dir, "SPEC-001", fp)
@@ -72,7 +72,7 @@ func TestDerive_MatchingGrant_Approved(t *testing.T) {
 
 func TestDerive_NonMatchingFingerprint_Draft(t *testing.T) {
 	dir := t.TempDir()
-	if err := WriteGrant(dir, "SPEC-001", "old-fingerprint", "Jane <jane@example.com>"); err != nil {
+	if err := WriteGrant(dir, "SPEC-001", "old-fingerprint", "Jane <jane@example.com>", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
 	state, err := Derive(dir, "SPEC-001", "new-fingerprint")
@@ -87,7 +87,7 @@ func TestDerive_NonMatchingFingerprint_Draft(t *testing.T) {
 func TestDerive_RevokedGrant_Draft(t *testing.T) {
 	dir := t.TempDir()
 	fp := "the-fingerprint"
-	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>"); err != nil {
+	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
 	entries, err := readGrantIDs(dir, "SPEC-001")
@@ -112,7 +112,7 @@ func TestDerive_RevokedGrant_Draft(t *testing.T) {
 func TestDerive_ReapprovalAfterRevocation_Approved(t *testing.T) {
 	dir := t.TempDir()
 	fp := "the-fingerprint"
-	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>"); err != nil {
+	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
 	ids, _ := readGrantIDs(dir, "SPEC-001")
@@ -120,7 +120,7 @@ func TestDerive_ReapprovalAfterRevocation_Approved(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A genuinely new grant, even for identical content, must revalidate the Specification.
-	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>"); err != nil {
+	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
 	state, err := Derive(dir, "SPEC-001", fp)
@@ -148,7 +148,7 @@ func TestActiveGrantID_NoEvidence_NotFound(t *testing.T) {
 func TestActiveGrantID_MatchingGrant_ReturnsItsID(t *testing.T) {
 	dir := t.TempDir()
 	fp := "the-fingerprint"
-	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>"); err != nil {
+	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
 	want, err := readGrantIDs(dir, "SPEC-001")
@@ -169,7 +169,7 @@ func TestActiveGrantID_MatchingGrant_ReturnsItsID(t *testing.T) {
 
 func TestActiveGrantID_NonMatchingFingerprint_NotFound(t *testing.T) {
 	dir := t.TempDir()
-	if err := WriteGrant(dir, "SPEC-001", "old-fingerprint", "Jane <jane@example.com>"); err != nil {
+	if err := WriteGrant(dir, "SPEC-001", "old-fingerprint", "Jane <jane@example.com>", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
 	_, ok, err := ActiveGrantID(dir, "SPEC-001", "new-fingerprint")
@@ -184,7 +184,7 @@ func TestActiveGrantID_NonMatchingFingerprint_NotFound(t *testing.T) {
 func TestActiveGrantID_RevokedGrant_NotFound(t *testing.T) {
 	dir := t.TempDir()
 	fp := "the-fingerprint"
-	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>"); err != nil {
+	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
 	ids, _ := readGrantIDs(dir, "SPEC-001")
@@ -205,7 +205,7 @@ func TestActiveGrantID_AgreesWithDerive(t *testing.T) {
 	// reports Approved — proving they share one derivation, never two that could drift apart.
 	dir := t.TempDir()
 	fp := "the-fingerprint"
-	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>"); err != nil {
+	if err := WriteGrant(dir, "SPEC-001", fp, "Jane <jane@example.com>", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
 	state, err := Derive(dir, "SPEC-001", fp)
@@ -236,7 +236,7 @@ func TestValidateEvidence_NoApprovalsDir_NoIssues(t *testing.T) {
 
 func TestValidateEvidence_ValidGrantAndRevocation_NoIssues(t *testing.T) {
 	dir := t.TempDir()
-	if err := WriteGrant(dir, "SPEC-001", "fp", "Jane <jane@example.com>"); err != nil {
+	if err := WriteGrant(dir, "SPEC-001", "fp", "Jane <jane@example.com>", []byte("content")); err != nil {
 		t.Fatal(err)
 	}
 	ids, err := readGrantIDs(dir, "SPEC-001")
@@ -334,5 +334,124 @@ func TestDerive_MalformedRecordIsIgnored(t *testing.T) {
 	}
 	if state != Draft {
 		t.Fatalf("expected malformed evidence to be ignored, deriving Draft, got %s", state)
+	}
+}
+
+// --- Revisions ---
+
+func TestRevisions_EmptyWhenNeverApproved(t *testing.T) {
+	dir := t.TempDir()
+	revs, err := Revisions(dir, "SPEC-001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) != 0 {
+		t.Fatalf("expected no revisions, got %v", revs)
+	}
+}
+
+func TestRevisions_OneGrant_ContentPreserved(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteGrant(dir, "SPEC-001", "fp1", "Jane <jane@example.com>", []byte("first content")); err != nil {
+		t.Fatal(err)
+	}
+	revs, err := Revisions(dir, "SPEC-001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) != 1 {
+		t.Fatalf("expected 1 revision, got %d", len(revs))
+	}
+	r := revs[0]
+	if r.Fingerprint != "fp1" || r.Approver != "Jane <jane@example.com>" {
+		t.Fatalf("unexpected revision: %+v", r)
+	}
+	if !r.ContentKnown || r.Content != "first content" {
+		t.Fatalf("expected content snapshot preserved, got %+v", r)
+	}
+	if r.Revoked {
+		t.Fatalf("expected an unrevoked grant to report Revoked=false")
+	}
+}
+
+func TestRevisions_SupersededApproval_PreviousRevisionStillInspectable(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteGrant(dir, "SPEC-001", "fp1", "Jane <jane@example.com>", []byte("original approved text")); err != nil {
+		t.Fatal(err)
+	}
+	// A later edit changes content/fingerprint and produces a second grant — the fingerprint
+	// derivation rule already makes the Specification Draft again until re-approved; Revisions
+	// must still show the first, now-superseded revision's content unchanged.
+	if err := WriteGrant(dir, "SPEC-001", "fp2", "Jane <jane@example.com>", []byte("revised approved text")); err != nil {
+		t.Fatal(err)
+	}
+	revs, err := Revisions(dir, "SPEC-001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) != 2 {
+		t.Fatalf("expected 2 revisions, got %d", len(revs))
+	}
+	if revs[0].Content != "original approved text" {
+		t.Fatalf("expected the first revision's original content preserved, got %q", revs[0].Content)
+	}
+	if revs[1].Content != "revised approved text" {
+		t.Fatalf("expected the second revision's content preserved, got %q", revs[1].Content)
+	}
+}
+
+func TestRevisions_RevokedGrant_MarkedRevokedWithAttribution(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteGrant(dir, "SPEC-001", "fp1", "Jane <jane@example.com>", []byte("content")); err != nil {
+		t.Fatal(err)
+	}
+	revs, err := Revisions(dir, "SPEC-001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteRevocation(dir, "SPEC-001", revs[0].GrantID, "Bob <bob@example.com>"); err != nil {
+		t.Fatal(err)
+	}
+	revs, err = Revisions(dir, "SPEC-001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !revs[0].Revoked || revs[0].RevokedBy != "Bob <bob@example.com>" {
+		t.Fatalf("expected revocation attribution to be reflected, got %+v", revs[0])
+	}
+}
+
+func TestRevisions_ContentUnknown_WhenSnapshotMissing(t *testing.T) {
+	// Simulates approval evidence written before the content-snapshot feature existed — the
+	// grant.json exists, but no matching .content.md does. Revisions must represent this
+	// honestly (ContentKnown: false) rather than fabricating or guessing content.
+	dir := t.TempDir()
+	specDirPath := specDir(dir, "SPEC-001")
+	if err := writeFileHelper(specDirPath, "abc123.grant.json", `{"spec_identity":"SPEC-001","fingerprint":"fp1","approver":"Jane","timestamp":"2020-01-01T00:00:00Z"}`); err != nil {
+		t.Fatal(err)
+	}
+	revs, err := Revisions(dir, "SPEC-001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) != 1 {
+		t.Fatalf("expected 1 revision, got %d", len(revs))
+	}
+	if revs[0].ContentKnown {
+		t.Fatalf("expected ContentKnown=false when no snapshot exists, got %+v", revs[0])
+	}
+}
+
+func TestValidateEvidence_ContentSnapshotIsRecognized(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteGrant(dir, "SPEC-001", "fp1", "Jane <jane@example.com>", []byte("content")); err != nil {
+		t.Fatal(err)
+	}
+	issues, err := ValidateEvidence(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issues) != 0 {
+		t.Fatalf("expected the .content.md snapshot to be a recognized evidence file, got issues: %+v", issues)
 	}
 }

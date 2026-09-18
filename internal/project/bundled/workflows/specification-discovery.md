@@ -23,6 +23,10 @@ result:
         type:
           - string
           - "null"
+      candidate_identity:
+        type:
+          - string
+          - "null"
       rationale:
         type:
           - string
@@ -90,6 +94,8 @@ Compare the candidate's actor and goal against every Specification inspected in 
 
 Report exactly one candidate: its title, a short explanation, the rationale for why it deserves an independent Specification now — which may mention other Specifications by name in prose, but must never record or enforce a formal dependency — and the authoritative knowledge it was derived from. Never define its flows, rules, preconditions, or acceptance criteria; that is Specification Definition's responsibility, not this one's.
 
+Alongside the title, also provide a concise semantic identity for the candidate: a few lowercase words capturing its core action and subject (for example, title "Create a Project", identity "create project"). The title is for the Human to read; the identity is what Gnomon mechanically normalizes into the Specification's filename. Do not construct the filename, SPEC number, path, or kebab-case form yourself — that normalization is Gnomon's responsibility, not yours. Keep the identity a genuine semantic summary, not merely the title with minor words stripped.
+
 ### 7. Report Result
 
 Produce the structured result described in Outputs. Create nothing yet — creation happens only after the Human decides.
@@ -101,6 +107,7 @@ Specification Discovery Result
 
 Outcome: CANDIDATE_PROPOSED | NO_CANDIDATE_IDENTIFIED | BLOCKED
 Candidate title:
+Candidate identity:
 Rationale:
 Derived from:
 Non-blocking caveat:
@@ -109,6 +116,7 @@ Remaining knowledge gap:
 
 - **Outcome** — `CANDIDATE_PROPOSED` when Step 6 presents a candidate; `NO_CANDIDATE_IDENTIFIED` when none can be identified from current project knowledge without inventing one — a statement about current knowledge only, never a claim that the Specification set is complete; `BLOCKED` when current project knowledge is itself insufficient to identify any candidate without inventing material product behavior.
 - **Candidate title** — present only when `CANDIDATE_PROPOSED`.
+- **Candidate identity** — present only when `CANDIDATE_PROPOSED`: the concise semantic identity described in Step 6, separate from the title, for Gnomon's own mechanical filename normalization.
 - **Rationale** — present only when `CANDIDATE_PROPOSED`: the short explanation and why this candidate deserves an independent Specification now.
 - **Derived from** — present only when `CANDIDATE_PROPOSED`: the specific authoritative knowledge the proposal is grounded in (for example, "`PROJECT.md` Key Capabilities").
 - **Non-blocking caveat** — optional, any Outcome: something the Human should know that does not block the result.
@@ -130,7 +138,7 @@ Draft Creation applies identically whether it follows an accepted Discovery prop
 Given a title — the accepted candidate's title, or a title the Human supplies directly:
 
 1. Determine the next Specification identity (see Specification Identity).
-2. Copy the Specification template, substituting only the identity and the given title.
+2. Copy the Specification template, substituting only the identity and the given title. When creation follows an accepted Discovery proposal, Gnomon derives the Specification's filename from the candidate's own semantic identity (Step 6), never from the title text itself.
 3. The new Specification is `Draft`. This follows directly from [`SPECIFICATION_LIFECYCLE.md`](../specifications/SPECIFICATION_LIFECYCLE.md) — a new Specification is effectively Draft; nothing here changes or needs to change that.
 
 Draft Creation never writes flows, rules, preconditions, or acceptance criteria. That content, if any, is [`workflows/specification-definition.md`](specification-definition.md)'s responsibility, invoked separately and only when the Human chooses to define the new Draft.
@@ -149,6 +157,7 @@ This rule does not reuse an identity as long as a higher-numbered Specification 
 ## Rules
 
 - Never define a candidate's flows, rules, preconditions, or acceptance criteria; propose identity only — title, explanation, rationale, and derivation.
+- Provide the candidate's semantic identity as a genuine, concise summary, never the title merely stripped of minor words; never construct the filename, SPEC number, or path yourself.
 - Never invent material product behavior to manufacture a candidate; report `BLOCKED` instead when current project knowledge is insufficient.
 - Treat every existing Specification — Draft or Approved, Discovery-created or manually created — as already-represented use-case territory.
 - Propose exactly one candidate per run; never a batch, queue, ranking, or project-wide plan.

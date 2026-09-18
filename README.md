@@ -65,9 +65,49 @@ Your choice is saved as the default. You can override it per-command with `--age
 
 ---
 
+## The everyday interface: `gnomon spec`
+
+You don't need to memorize a command sequence. In a real interactive terminal, `gnomon spec` opens a browser of every Specification — searchable, with each one's lifecycle visible at a glance:
+
+```
+? Specifications (1)
+  Filter: (type to filter)
+
+ ❯ + Create new Specification
+   + Discover next Specification
+   SPEC-001   Password Reset                 Draft
+
+↑/↓ navigate • type to filter • Enter select • Esc cancel
+```
+
+Selecting a Specification — or running `gnomon spec SPEC-001` directly — opens its workspace: current state, why any action is unavailable, and only the actions that are actually valid right now as an interactive menu.
+
+```
+SPEC-001 — Password Reset
+  Lifecycle:   Draft
+  Fingerprint: f094efce22b1
+  Not currently available: implement (SPEC-001 is not Approved (currently Draft)); test (...); revoke (...)
+
+? SPEC-001 — choose an action
+
+  ❯ Define
+    Approve
+    Verify
+    Review
+    Back
+```
+
+Choosing Approve runs the same deterministic operation `gnomon approve` always has — it's still the one Human-exclusive act in the system, still requires deliberately selecting it. Nothing here auto-approves or chains one action into the next; after Approve completes, the workspace redraws with freshly re-derived state, offering Implement/Test/Revoke now that they're actually valid.
+
+Discovery works the same way from the browser: it proposes one candidate, shows you its rationale, and creates nothing until you explicitly choose "Yes, create it" — declining leaves nothing behind.
+
+Non-interactive contexts (scripts, CI, a piped command) get a clear refusal instead of hanging waiting for keystrokes that will never come, pointing at `gnomon run` — see [The advanced path](#the-advanced-path-gnomon-run) below. The rest of this section walks through what each contextual action actually does, step by step, since that's the clearest way to explain *why* each one exists; day to day, `gnomon spec` does all of it, interactively, without needing any of the commands named along the way.
+
+---
+
 ## Walking through it: adding subscription cancellation
 
-Say you're adding cancellation to an existing SaaS app. Here's what actually happens, command by command, with real output.
+Say you're adding cancellation to an existing SaaS app. Here's what actually happens inside the workspace, step by step, with real output.
 
 ### 1. Start the Specification
 
@@ -78,29 +118,21 @@ $ gnomon spec create "Subscription Cancellation"
 → Define its content, then `gnomon approve SPEC-001` once you judge it ready.
 ```
 
-This is entirely deterministic — no Agent runs. Gnomon assigns the next identity, copies the Specification template into `.gnomon/specifications/SPEC-001-subscription-cancellation.md`, and stops. It's an empty template with section headers (Use Case, Scope, Business Rules, Acceptance Criteria, Dependencies, …) — nothing has been written yet, and Gnomon doesn't pretend otherwise.
+This is entirely deterministic — no Agent runs. Gnomon assigns the next identity, copies the Specification template into `.gnomon/specifications/SPEC-001-subscription-cancellation.md`, and stops. It's an empty template with section headers (Use Case, Scope, Business Rules, Acceptance Criteria, Dependencies, …) — nothing has been written yet, and Gnomon doesn't pretend otherwise. (Discovery, from the browser, reaches this same point after you accept a proposed candidate — see [Discovery](#the-everyday-interface-gnomon-spec) above.)
 
-**First thing worth noticing:** this file exists, but it isn't real requirements yet. Watch what happens if you try to jump straight to building it anyway:
+**First thing worth noticing:** this file exists, but it isn't real requirements yet. Open its workspace (`gnomon spec SPEC-001`) and Implement is listed, but not selectable:
 
 ```
-$ gnomon implement SPEC-001
-! Implementation blocked — SPEC-001
-
-Unresolved
-  SPEC-001 is not Approved (currently Draft)
-
-→ Define SPEC-001 further, or `gnomon approve SPEC-001` if you judge it ready.
+SPEC-001 — Subscription Cancellation
+  Lifecycle: Draft
+  Not currently available: implement (SPEC-001 is not Approved (currently Draft)); test (...); revoke (...)
 ```
 
-This is the first real difference from "just pointing an agent at the repo." No Agent was started for that call — none. The CLI checked the Specification's lifecycle state against the filesystem and refused before spending a single token. If you'd been running an AI coding agent directly with no Gnomon in the way, there is nothing stopping it from happily implementing cancellation against a spec that's still an empty template — it would just do its best, and its best means guessing.
+This is the first real difference from "just pointing an agent at the repo." No Agent is ever started for an unavailable action — the CLI checks the Specification's lifecycle state against the filesystem before anything can run. If you'd been running an AI coding agent directly with no Gnomon in the way, there is nothing stopping it from happily implementing cancellation against a spec that's still an empty template — it would just do its best, and its best means guessing.
 
 ### 2. Define it — and watch it ask instead of guess
 
-```
-$ gnomon spec define SPEC-001
-```
-
-This launches your Agent with the Specification Definition workflow's instructions loaded. It reads the current (empty) content, reads your domain/architecture knowledge, and starts filling in what it can determine on its own — the actor, the general shape of the flow. But it hits real, material questions no amount of code-reading answers: *does access end immediately, or at the end of the current billing period? does the customer get a refund for unused time?* These are exactly the kind of business decisions the workflow's own rules forbid it from inventing — so instead of picking a plausible answer and moving on, it asks you, right there in the same terminal session, and writes your answer into the Specification.
+Selecting **Define** from the workspace menu launches your Agent with the Specification Definition workflow's instructions loaded. It reads the current (empty) content, reads your domain/architecture knowledge, and starts filling in what it can determine on its own — the actor, the general shape of the flow. But it hits real, material questions no amount of code-reading answers: *does access end immediately, or at the end of the current billing period? does the customer get a refund for unused time?* These are exactly the kind of business decisions the workflow's own rules forbid it from inventing — so instead of picking a plausible answer and moving on, it asks you, right there in the same terminal session, and writes your answer into the Specification.
 
 That's the second real difference. It isn't that the agent is incapable of guessing — it's that "guess" isn't an available move for a material business decision under this workflow. If a gap belongs somewhere else entirely — say, how this interacts with your existing billing-provider integration in `ARCHITECTURE.md` — it doesn't quietly decide that either; it stops that part of the work, tells you what decision is needed and who owns it, and once you answer, a separate step (Knowledge Resolution) applies that decision to the right document rather than burying it inside this one Specification.
 
@@ -108,14 +140,7 @@ Once every material gap has an answer, the Agent reports back and the workflow e
 
 ### 3. Approve it — explicitly, by you
 
-```
-$ gnomon approve SPEC-001
-✓ SPEC-001 is now Approved
-
-→ gnomon implement SPEC-001
-```
-
-This is the one step in the entire system that's exclusively yours. No workflow result, no Agent output, no "looks good to me" from the model can do this — `approve` is a separate CLI command a Human runs on purpose. Under the hood it records a fingerprint of the Specification's exact current content. That matters more than it sounds like it should:
+Selecting **Approve** is the one step in the entire system that's exclusively yours. No workflow result, no Agent output, no "looks good to me" from the model can do this. Under the hood it records a fingerprint of the Specification's exact current content. That matters more than it sounds like it should:
 
 ```
 $ gnomon status
@@ -123,9 +148,6 @@ $ gnomon status
 
 Specifications
   SPEC-001: Approved
-
-Working Tree
-  uncommitted changes present
 ```
 
 Now edit the Specification — fix a typo, clarify a sentence, anything:
@@ -136,40 +158,30 @@ $ gnomon status
 
 Specifications
   SPEC-001: Draft
-
-Working Tree
-  uncommitted changes present
 ```
 
-Back to Draft. Automatically. Nobody had to remember to revoke it — the approval was bound to *that exact content*, and the content changed. There's no stale "approved" checkbox anywhere to forget about.
+Back to Draft. Automatically. Nobody had to remember to revoke it — the approval was bound to *that exact content*, and the content changed. There's no stale "approved" checkbox anywhere to forget about. Its previous approved text, who approved it, and when, remain visible in the workspace's revision list rather than disappearing.
 
 ### 4. Build it — now that it's actually eligible
 
-```
-$ gnomon approve SPEC-001
-$ gnomon implement SPEC-001
-```
-
-*(The second command runs the same way `spec define` did: your Agent is launched with the Implementation workflow's instructions and the approved Specification as its scope. It writes the code, then reports back.)*
+Re-approve, and **Implement** appears in the menu, now that the Specification is Approved again. Selecting it launches your Agent with the Implementation workflow's instructions and the approved Specification as its scope; it writes the code, then reports back.
 
 Here's the part that doesn't show up when you just watch the terminal: Gnomon doesn't accept "I'm done" as the result. The Implementation workflow declares, in its own file, exactly what a finished result has to look like — structured fields, not prose. The CLI parses whatever comes back and checks it against that shape before it will tell you it succeeded. If the Agent's process exits cleanly but never produces a valid result, that is reported as a failure, not a success — a clean exit does not mean the workflow succeeded, and a nonzero one doesn't automatically mean it failed, because Gnomon itself gracefully ends the session the moment it sees a valid result, and that intentional shutdown is never shown to you as a crash.
 
-### 5. Test and verify — and notice the difference between them
+### 5. Test it
+
+Selecting **Test** designs and runs the actual tests against the same Approved Specification — also listed in the workspace only once Implementation's precondition (Approved) is met.
+
+### 6. Verify and review — deliberately not Specification-scoped
+
+Verification and Review are not contextual actions inside a Specification's workspace, on purpose: their own Contracts declare `specification_reference: none` — Core's own statement that their target isn't necessarily a Specification at all, and nothing ties either one to *this* Specification's lifecycle the way Implementation and Testing are tied to it. Run them against whatever the actual change touches, through [the advanced path](#the-advanced-path-gnomon-run):
 
 ```
-$ gnomon test SPEC-001
-$ gnomon verify
+gnomon run verification src/billing/
+gnomon run review src/billing/
 ```
 
-Testing designs and runs the actual tests. Verification is a distinct workflow, deliberately: it doesn't get to say "everything looks fine." Its Result Contract requires a `PASS`, `FAIL`, or `UNVERIFIABLE` **per obligation**, plus an aggregate the CLI itself computes from those — not from anything the Agent narrates. If even one obligation comes back `FAIL` or `UNVERIFIABLE`, the aggregate is `FAIL`/blocked, full stop; there's no vague "mostly working" state to hide in.
-
-### 6. Review — only if this actually calls for it
-
-```
-$ gnomon review
-```
-
-Review is separate from Verification on purpose: Verification asks "is this objectively true," Review asks "is this actually a good idea" — risk, quality, things Verification's checklist can't see. Not every change needs it. A subscription-cancellation flow touching billing and access control probably does; a config typo fix doesn't. Gnomon doesn't force it into the sequence — you run it when the stakes call for it, and its findings land in a different vocabulary (`DEFECT`, `RISK`, `KNOWLEDGE GAP`) from Verification's `FAIL`, because they're different kinds of claims.
+Verification's Result Contract requires a `PASS`, `FAIL`, or `UNVERIFIABLE` **per obligation**, plus an aggregate the CLI itself computes from those — not from anything the Agent narrates; if even one obligation comes back `FAIL` or `UNVERIFIABLE`, the aggregate is blocked, full stop. Review asks a different question — "is this actually a good idea," risk and quality Verification's checklist can't see — and isn't needed for every change; a subscription-cancellation flow touching billing and access control probably warrants it, a config typo fix doesn't. Its findings land in a different vocabulary (`DEFECT`, `RISK`, `KNOWLEDGE GAP`) from Verification's `FAIL`, because they're different kinds of claims.
 
 ### 7. Check in without re-reading the whole conversation
 
@@ -180,21 +192,21 @@ $ gnomon next
 ✓ Valid actions for 1 Specification(s), by identity — no priority implied
 
 SPEC-001
-  Approved. Valid: `gnomon spec define SPEC-001`, `gnomon implement SPEC-001`, `gnomon test SPEC-001`, `gnomon revoke SPEC-001`.
+  Approved. Valid: `gnomon run specification-definition SPEC-001`, `gnomon run implementation SPEC-001`, `gnomon run testing SPEC-001`, `gnomon revoke SPEC-001`.
 
 Working Tree
-  Uncommitted changes are present — `gnomon finalize` may be worth considering when you judge the work ready.
+  Uncommitted changes are present — `gnomon run git-finalization` may be worth considering when you judge the work ready.
 ```
 
-`next` never claims to remember what you did last session — it doesn't have that information, on purpose (more on that below). It's telling you what's *currently* true and *currently* valid, computed fresh from the filesystem, the same answer no matter who asks or which Agent they're using.
+`next` never claims to remember what you did last session — it doesn't have that information, on purpose (more on that below). It's telling you what's *currently* true and *currently* valid, computed fresh from the filesystem, the same answer no matter who asks or which Agent they're using. (It names the `run` form here because that's what's actually runnable outside the workspace; inside `gnomon spec SPEC-001` the same actions appear as plain menu entries.)
 
 ### 8. Hand it off to Git — as its own authorized step
 
 ```
-$ gnomon finalize
+gnomon run git-finalization
 ```
 
-This is also its own workflow, not an automatic last step of Implementation. And it has one hard rule worth knowing: any part of the change still governed by a Draft Specification is categorically excluded from what gets finalized — not "discouraged," excluded, with no override. "Implement, then quietly commit and push" is not a thing that can happen by accident here.
+Finalization is its own workflow too, not an automatic last step of Implementation, and — like Verify/Review — not Specification-scoped, so it isn't a workspace action either. It has one hard rule worth knowing: any part of the change still governed by a Draft Specification is categorically excluded from what gets finalized — not "discouraged," excluded, with no override. "Implement, then quietly commit and push" is not a thing that can happen by accident here.
 
 ---
 
@@ -250,17 +262,38 @@ gnomon <command> --help
 
 | Group | Commands |
 |---|---|
+| Everyday (interactive) | `spec`, `spec <SPEC-id>` |
 | Project | `init`, `describe`, `bootstrap` |
-| Specification | `spec discover`, `spec create <title>`, `spec define <SPEC-id>`, `approve <SPEC-id>`, `revoke <SPEC-id>` |
-| Engineering | `implement <SPEC-id>`, `test [SPEC-id]`, `verify [target]`, `review [target]`, `finalize` |
+| Specification (CLI-native) | `spec create <title>`, `approve <SPEC-id>`, `revoke <SPEC-id>` |
 | Guidance / Inspection | `status`, `validate`, `next` |
 | Advanced | `run <workflow-identity> [target]`, `agent`, `agent set-default <claude/codex>` |
 
 A few worth knowing about before you need them:
 
-* **`describe` / `bootstrap`** are the recommended first step after `init` — for a brand-new project and for first-time adoption of an existing one alike, since `describe`'s own first step reads whatever's already in the repository rather than assuming it's empty. Recommended, never enforced: if your project's knowledge is already accurate, going straight to `spec create` (as the walkthrough above does) is equally legitimate.
+* **`spec` / `spec <SPEC-id>`** are the two everyday commands — see "The everyday interface" above. There is no separate command for Define, Implement, Test, Verify, or Review to memorize; each is a contextual action from the workspace, or, outside it, a `gnomon run` invocation — see below.
+* **`spec create`, `approve`, `revoke`** are the three Specification-related operations that keep their own dedicated command even outside the workspace: none of them is a Workflow Contract `gnomon run` could invoke — Draft Creation and Approval/Revocation are deterministic, CLI-native operations Core itself carves out from the Agent workflow model entirely.
+* **`describe` / `bootstrap`** are the recommended first step after `init` — for a brand-new project and for first-time adoption of an existing one alike, since `describe`'s own first step reads whatever's already in the repository rather than assuming it's empty. Recommended, never enforced: if your project's knowledge is already accurate, going straight to Specification work is equally legitimate.
 * **`validate`** is a different question from `status`: not "what state is my project in" but "is the Gnomon structure itself intact" — Contract well-formedness, evidence file shape, duplicate identities. Clean pass/fail, meant for CI.
-* **`run <identity> [target]`** is the generic escape hatch — it invokes any workflow by its own declared identity, including a project's own custom workflows, through the exact same engine the dedicated commands use. Ordinary work should use the dedicated command; `run` exists for the cases that don't have one.
+
+### The advanced path: `gnomon run`
+
+Every Contract-driven Agent workflow — Implementation, Testing, Verification, Review, Specification Definition, Specification Discovery, Git Finalization — is reachable non-interactively by its own declared identity, for scripts, CI, or a manual one-off:
+
+```
+gnomon run implementation SPEC-014
+gnomon run testing SPEC-014
+gnomon run verification src/auth/
+gnomon run review src/auth/
+gnomon run specification-definition SPEC-014
+gnomon run specification-discovery
+gnomon run git-finalization
+```
+
+This is the exact same eligibility and execution engine the workspace's contextual actions use — nothing behaves differently between them. It's also how a project's own custom, Contract-driven workflows are invoked, the same way as any built-in one. Ordinary interactive work should use `gnomon spec` / `gnomon spec <SPEC-id>` instead; `run` exists for where an interactive browser can't run, not as a second way to do the same thing day to day.
+
+### Specification revisions
+
+Every time a Specification is approved, Gnomon preserves the exact content that was approved — not just the fingerprint. Editing an Approved Specification makes it Draft again (as always), but the previous approved text, who approved it, and when, all remain inspectable in its workspace rather than disappearing. This is approval history, not execution history: Gnomon still never remembers which workflow last ran or whether a past Verification passed — only durable, Human-authorized evidence is kept.
 
 ---
 

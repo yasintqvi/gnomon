@@ -110,10 +110,16 @@ func ReadContent(specsDir string, id Identity) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-func slugify(title string) string {
+// Slugify mechanically normalizes s into a lowercase, hyphen-separated, filename-safe form —
+// the CLI's entire responsibility for filename construction (see CreateDraft): lowercase,
+// non-alphanumeric runs collapsed to a single hyphen, no leading/trailing hyphen. It performs no
+// semantic transformation (no stop-word removal, no NLP) — callers needing a semantically
+// meaningful slug must supply their own already-concise input (see workflows/specification-
+// discovery.md's candidate_identity field for the Discovery-driven case).
+func Slugify(s string) string {
 	var b strings.Builder
 	lastHyphen := true // suppress a leading hyphen
-	for _, r := range strings.ToLower(title) {
+	for _, r := range strings.ToLower(s) {
 		switch {
 		case r >= 'a' && r <= 'z' || r >= '0' && r <= '9':
 			b.WriteRune(r)
@@ -129,8 +135,16 @@ func slugify(title string) string {
 }
 
 // CreateDraft copies the Specification template, substituting only the identity and the given
-// title — never generating any behavioral content — and writes the new Draft Specification file.
-func CreateDraft(specsDir string, id Identity, title string) (string, error) {
+// display title — never generating any behavioral content — and writes the new Draft
+// Specification file under a name built from slug. slug is the caller's responsibility to
+// supply already-normalized (Slugify, applied to whatever the caller judges an appropriate
+// source — the title itself for a direct Human-supplied title, or a Discovery candidate's own
+// separate semantic identity field): CreateDraft performs no semantic judgment about what the
+// slug should contain, only mechanical file construction from what it is given.
+func CreateDraft(specsDir string, id Identity, title, slug string) (string, error) {
+	if slug == "" {
+		return "", fmt.Errorf("a non-empty slug is required")
+	}
 	templatePath := filepath.Join(specsDir, "SPEC-000-use-case-name.md")
 	data, err := os.ReadFile(templatePath)
 	if err != nil {
@@ -143,7 +157,7 @@ func CreateDraft(specsDir string, id Identity, title string) (string, error) {
 	content = strings.ReplaceAll(content, "[Use Case Name]", title)
 	content = strings.ReplaceAll(content, "[Use case name]", title)
 
-	filename := fmt.Sprintf("%s-%s.md", id, slugify(title))
+	filename := fmt.Sprintf("%s-%s.md", id, slug)
 	destPath := filepath.Join(specsDir, filename)
 	if _, err := os.Stat(destPath); err == nil {
 		return "", fmt.Errorf("specification file already exists: %s", destPath)
@@ -152,4 +166,23 @@ func CreateDraft(specsDir string, id Identity, title string) (string, error) {
 		return "", err
 	}
 	return destPath, nil
+}
+
+var titleHeadingPattern = regexp.MustCompile(`^#\s*SPEC-\S+\s*[—–-]\s*(.+?)\s*$`)
+
+// Title mechanically extracts the display title from a Specification's own first-line heading
+// (the template's own "# SPEC-[ID] — [Use Case Name]" convention) — plain text extraction, never
+// a semantic judgment about the content. Falls back to the identity itself when the heading is
+// absent or doesn't match the convention, so a malformed or unconventional file still displays
+// something rather than an empty string.
+func Title(id Identity, content []byte) string {
+	for _, line := range strings.Split(string(content), "\n") {
+		if m := titleHeadingPattern.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+			return m[1]
+		}
+		if strings.TrimSpace(line) != "" {
+			break // only the first non-blank line is ever considered the heading
+		}
+	}
+	return string(id)
 }

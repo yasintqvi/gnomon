@@ -71,14 +71,15 @@ func TestSlice6Commands_DistinctFromValidateAndRun(t *testing.T) {
 	}
 }
 
-// TestSlice6Commands_ScopeBoundary is the final scope-boundary test in this sequence: by Slice 6,
-// every command from cli/COMMAND_SURFACE.md's full v1 surface is expected to be registered, so
-// there is no longer any "still out of scope" command to check for. This test exists to close the
-// series started by TestSlice2Commands_ScopeBoundary, not to assert anything remains unregistered.
-func TestSlice6Commands_ScopeBoundary(t *testing.T) {
+// TestCommandSurface_FinalShape is the current authoritative statement of the full public
+// command surface: the everyday interactive interface, CLI-native Human-exclusive/deterministic
+// operations, project setup, guidance/inspection, and the advanced run/agent path. Contract-driven
+// Agent workflows with no non-run-representable operation of their own (implement, test, verify,
+// review, finalize, spec discover, spec define) are deliberately absent — see
+// TestWorkflowCommands_NoLongerRegisteredAsTopLevel.
+func TestCommandSurface_FinalShape(t *testing.T) {
 	want := []string{
 		"init", "describe", "bootstrap", "spec", "approve", "revoke",
-		"implement", "test", "verify", "review", "finalize",
 		"status", "validate", "next", "run", "agent",
 	}
 	have := map[string]bool{}
@@ -87,7 +88,7 @@ func TestSlice6Commands_ScopeBoundary(t *testing.T) {
 	}
 	for _, name := range want {
 		if !have[name] {
-			t.Fatalf("expected top-level %q to be registered by the close of Step 12", name)
+			t.Fatalf("expected top-level %q to be registered", name)
 		}
 	}
 }

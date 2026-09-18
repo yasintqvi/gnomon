@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -81,8 +82,13 @@ func specDir(approvalsDir, specID string) string {
 	return filepath.Join(approvalsDir, specID)
 }
 
-// WriteGrant writes one new, immutable grant record. It never edits or removes any prior record.
-func WriteGrant(approvalsDir, specID, fingerprint, approver string) error {
+// WriteGrant writes one new, immutable grant record, plus a sibling content snapshot
+// (<id>.content.md, the exact approved text) sharing the same record id — this is the
+// Specification revision model's entire storage mechanism: a revision is simply an approval
+// grant with its content preserved alongside it, so what was approved remains inspectable after
+// later edits supersede it, without a separate history store. Neither file is ever edited or
+// removed once written.
+func WriteGrant(approvalsDir, specID, fingerprint, approver string, content []byte) error {
 	dir := specDir(approvalsDir, specID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -99,6 +105,9 @@ func WriteGrant(approvalsDir, specID, fingerprint, approver string) error {
 	}
 	data, err := json.MarshalIndent(g, "", "  ")
 	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, id+".content.md"), content, 0o644); err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, id+".grant.json"), data, 0o644)
@@ -157,17 +166,37 @@ func ActiveGrantID(approvalsDir, specID, currentFingerprint string) (string, boo
 // "which grant, if any, currently causes Approved" question is answered by exactly one piece of
 // logic — never reimplemented or allowed to drift between the two callers.
 func activeGrant(approvalsDir, specID, currentFingerprint string) (string, bool, error) {
-	dir := specDir(approvalsDir, specID)
-	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
-		return "", false, nil
-	}
+	grants, revocations, err := scanEvidence(approvalsDir, specID)
 	if err != nil {
 		return "", false, err
 	}
+	for id, g := range grants {
+		if revocations[id] != nil {
+			continue
+		}
+		if g.Fingerprint == currentFingerprint {
+			return id, true, nil
+		}
+	}
+	return "", false, nil
+}
+
+// scanEvidence reads every grant/revocation file for one Specification once, so activeGrant and
+// Revisions derive from identical parsing rather than two independent scans that could drift.
+// Unreadable or malformed evidence is silently excluded here, exactly as it always has been —
+// never treated as valid, never repaired. revocations is keyed by the grant id it revokes.
+func scanEvidence(approvalsDir, specID string) (map[string]Grant, map[string]*Revocation, error) {
+	dir := specDir(approvalsDir, specID)
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
 
 	grants := map[string]Grant{}
-	revoked := map[string]bool{}
+	revocations := map[string]*Revocation{}
 
 	for _, e := range entries {
 		if e.IsDir() {
@@ -176,13 +205,13 @@ func activeGrant(approvalsDir, specID, currentFingerprint string) (string, bool,
 		name := e.Name()
 		data, err := os.ReadFile(filepath.Join(dir, name))
 		if err != nil {
-			continue // unreadable evidence is excluded, never treated as valid
+			continue
 		}
 		switch {
 		case strings.HasSuffix(name, ".grant.json"):
 			var g Grant
 			if err := json.Unmarshal(data, &g); err != nil || g.Approver == "" || g.Fingerprint == "" {
-				continue // malformed or unattributed — excluded from consideration
+				continue
 			}
 			grants[strings.TrimSuffix(name, ".grant.json")] = g
 		case strings.HasSuffix(name, ".revocation.json"):
@@ -190,19 +219,61 @@ func activeGrant(approvalsDir, specID, currentFingerprint string) (string, bool,
 			if err := json.Unmarshal(data, &r); err != nil || r.Revokes == "" {
 				continue
 			}
-			revoked[r.Revokes] = true
+			revocations[r.Revokes] = &r
 		}
+	}
+	return grants, revocations, nil
+}
+
+// Revision is one durably-evidenced approval grant, together with the content it was granted
+// against — the Specification revision model's read side. A Revision always exists once a grant
+// does; Content is empty only when a content snapshot was never captured for that grant (evidence
+// written before this snapshot existed, or a content file that failed to read) — represented
+// honestly as unavailable rather than reconstructed or guessed.
+type Revision struct {
+	GrantID      string
+	Fingerprint  string
+	Approver     string
+	ApprovedAt   string
+	Content      string
+	ContentKnown bool
+	Revoked      bool
+	RevokedBy    string
+	RevokedAt    string
+}
+
+// Revisions returns every revision this Specification has ever had a grant for, oldest first —
+// derived entirely from existing approval evidence (grants, their revocations, and their content
+// snapshots), never from a separately persisted history. This is not execution history: it
+// reflects only Human approval acts, the one durable, authoritative artifact type this model
+// already recognizes.
+func Revisions(approvalsDir, specID string) ([]Revision, error) {
+	grants, revocations, err := scanEvidence(approvalsDir, specID)
+	if err != nil {
+		return nil, err
 	}
 
+	revisions := make([]Revision, 0, len(grants))
 	for id, g := range grants {
-		if revoked[id] {
-			continue
+		rev := Revision{
+			GrantID:     id,
+			Fingerprint: g.Fingerprint,
+			Approver:    g.Approver,
+			ApprovedAt:  g.Timestamp,
 		}
-		if g.Fingerprint == currentFingerprint {
-			return id, true, nil
+		if content, err := os.ReadFile(filepath.Join(specDir(approvalsDir, specID), id+".content.md")); err == nil {
+			rev.Content = string(content)
+			rev.ContentKnown = true
 		}
+		if r := revocations[id]; r != nil {
+			rev.Revoked = true
+			rev.RevokedBy = r.RevokedBy
+			rev.RevokedAt = r.Timestamp
+		}
+		revisions = append(revisions, rev)
 	}
-	return "", false, nil
+	sort.Slice(revisions, func(i, j int) bool { return revisions[i].ApprovedAt < revisions[j].ApprovedAt })
+	return revisions, nil
 }
 
 // EvidenceIssue is one structural problem found in a single grant or revocation file — never a
@@ -271,8 +342,11 @@ func ValidateEvidence(approvalsDir string) ([]EvidenceIssue, error) {
 				if r.Revokes == "" || r.RevokedBy == "" {
 					issues = append(issues, EvidenceIssue{SpecID: specID, Filename: name, Problem: "missing required field (revokes or revoked_by)"})
 				}
+			case strings.HasSuffix(name, ".content.md"):
+				// A revision's content snapshot — plain text, nothing to structurally validate
+				// beyond its presence.
 			default:
-				issues = append(issues, EvidenceIssue{SpecID: specID, Filename: name, Problem: "unrecognized evidence filename (expected *.grant.json or *.revocation.json)"})
+				issues = append(issues, EvidenceIssue{SpecID: specID, Filename: name, Problem: "unrecognized evidence filename (expected *.grant.json, *.revocation.json, or *.content.md)"})
 			}
 		}
 	}

@@ -399,13 +399,28 @@ func runWorkflow(root string, l project.Layout, wf contract.Workflow, workflowPa
 // and workflowPath is always the caller's own already-resolved path — never reconstructed from
 // wf.Identity here.
 func runWorkflowWithAdapter(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, ad adapter.Adapter) (*present.Report, error) {
+	outcome, detail, failureRep, err := obtainWorkflowOutcome(root, l, wf, workflowPath, kind, target, ad)
+	if failureRep != nil {
+		return failureRep, err
+	}
+	return classifyAndRender(wf, target, detail, outcome)
+}
+
+// obtainWorkflowOutcome runs the Agent and returns its raw, Contract-validated but not yet
+// classified/rendered result — the part of runWorkflowWithAdapter's sequence every caller shares
+// (launch, poll, consume). A non-nil failureRep means the run never produced a valid result at
+// all (process failure, cancellation, or protocol error): callers must return it as-is rather
+// than attempting to classify anything. This split exists so a caller needing the raw payload
+// before generic rendering (Discovery's interactive accept flow) can reuse this exact sequence
+// instead of duplicating it.
+func obtainWorkflowOutcome(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, ad adapter.Adapter) (*result.Outcome, []string, *present.Report, error) {
 	runID, err := result.NewRunID()
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	destPath, err := result.Destination(root, runID)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
 	// Captured by the polling closure the instant a valid result is detected, while the Agent may
@@ -439,7 +454,7 @@ func runWorkflowWithAdapter(root string, l project.Layout, wf contract.Workflow,
 	}
 
 	if err := ad.Prepare(ctx); err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	_ = ad.Run()
 	status := ad.Status()
@@ -463,9 +478,8 @@ func runWorkflowWithAdapter(root string, l project.Layout, wf contract.Workflow,
 		}
 	}
 
-	label := humanizeIdentity(wf.Identity)
-
 	if consumeErr != nil {
+		label := humanizeIdentity(wf.Identity)
 		rep := &present.Report{Target: target, Detail: detail}
 		switch {
 		case status.Terminated:
@@ -480,21 +494,25 @@ func runWorkflowWithAdapter(root string, l project.Layout, wf contract.Workflow,
 			rep.Summary = fmt.Sprintf("%s could not complete", label)
 			rep.AddSection("Reason", humanizeProtocolError(consumeErr)+".")
 		}
-		return rep, consumeErr
+		return nil, nil, rep, consumeErr
 	}
 
+	return outcome, detail, nil, nil
+}
+
+// classifyAndRender is the generic classify-then-render half of runWorkflowWithAdapter's
+// sequence, driven entirely by the workflow's own already-loaded Contract — never a hardcoded
+// switch over a specific workflow's terminal vocabulary. wf.Validate() (run inside contract.Load,
+// always before a workflow can be invoked at all) already guarantees every value the schema's
+// enum permits has an explicit "success"/"blocked" classification, so a schema-conformant payload
+// reaching here with an unclassified terminal value is expected to be unreachable — handled
+// defensively below as a failure, never silently treated as success. This is also exactly what
+// keeps a workflow's own valid negative conclusion (Verification FAIL, Review DEFECT/RISK/
+// KNOWLEDGE GAP) from ever being reported as a process/protocol failure: those values reach here
+// as a normally-classified "blocked" outcome, never through obtainWorkflowOutcome's failure path.
+func classifyAndRender(wf contract.Workflow, target string, detail []string, outcome *result.Outcome) (*present.Report, error) {
 	rep := &present.Report{Target: target, Detail: detail}
 
-	// class is looked up generically from the workflow's own Contract — never a hardcoded switch
-	// over a specific workflow's terminal vocabulary. wf.Validate() (run inside contract.Load,
-	// always before a workflow can be invoked at all) already guarantees every value the schema's
-	// enum permits has an explicit "success"/"blocked" classification, so a schema-conformant
-	// payload reaching here with an unclassified terminal value is expected to be unreachable —
-	// handled defensively below as a failure, never silently treated as success. This is also
-	// exactly what keeps a workflow's own valid negative conclusion (Verification FAIL, Review
-	// DEFECT/RISK/KNOWLEDGE GAP) from ever being reported as a process/protocol failure: those
-	// values reach here as a normally-classified "blocked" outcome, never through the consumeErr
-	// branch above at all.
 	class, known := wf.Result.ClassificationFor(outcome.Terminal)
 	if !known {
 		rep.Outcome = present.Failed
