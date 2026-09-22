@@ -80,11 +80,9 @@ Next, let Gnomon establish what the project already knows:
 
 ```text
 $ gnomon describe
-
-...
 ```
 
-The agent reads the project and existing documentation, then helps establish or reconcile knowledge such as the project's purpose, domain, architecture, stack, and conventions.
+The agent inspects the repository and any project knowledge already recorded — source, docs, configuration, whatever's there — and establishes or reconciles knowledge such as the project's purpose, domain, architecture, stack, and conventions from it. If something material genuinely can't be determined that way, it asks you directly, in the same session, rather than guessing; on a brand-new project with little to inspect yet, that's how it learns what you're building.
 
 Gnomon doesn't require you to explain an existing project from scratch every time a new session begins. That knowledge stays with the repository and can evolve with it.
 

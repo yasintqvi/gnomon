@@ -47,7 +47,7 @@ Do not use it for a knowledge gap raised while an existing workflow is already r
 
 ## Inputs
 
-- The user's initial project intent
+- The user's initial project intent — established from repository evidence during Inspect and, when that evidence is genuinely insufficient to determine even the project's basic purpose, by asking the human directly within this same session (see Step 3 and Failure Handling); thin or absent evidence at the start is not itself a problem
 - The existing repository as found: any partially filled `context/` documents, prior code, configuration, or documentation
 - Gnomon's ownership model for `PROJECT.md`, `DOMAIN.md`, `ARCHITECTURE.md`, `STACK.md`, `CONVENTIONS.md`, and — when Bootstrap's authorized scope requires it — `PRODUCT_EXPERIENCE.md`, `UI_FOUNDATION.md`, and `INTERACTION_PATTERNS.md`
 - Bootstrap's own Execution steps and Rules (`workflows/bootstrap.md`), as the reference point for what is material
@@ -57,15 +57,17 @@ Do not use it for a knowledge gap raised while an existing workflow is already r
 
 ### 1. Inspect
 
-Inspect the repository before asking anything. Read existing `context/` documents, distinguishing genuinely approved project content from unfilled Gnomon template placeholders (bracketed text such as `[Project name]`), and review any prior code, configuration, or documentation that carries project intent. Do not assume the project is empty.
+Inspect the repository before asking anything. Read existing `context/` documents, distinguishing genuinely approved project content from unfilled Gnomon template placeholders (bracketed text such as `[Project name]`), and review any prior code, configuration, or documentation that carries project intent. Do not assume the project is empty — a project with meaningful evidence must never be asked to restate what that evidence already establishes.
 
 ### 2. Reconcile Intent With Existing Knowledge
 
-Compare the stated initial intent with what Inspect found. Identify what is already established and consistent, what conflicts, and what is entirely absent.
+Compare whatever initial intent is stated — from the repository, from earlier in this same session, or, once asked, directly from the human — with what Inspect found. Identify what is already established and consistent, what conflicts, and what is entirely absent. Existing recorded knowledge is never discarded or regenerated merely because new intent is stated; where the two genuinely conflict, this is Contradictory Existing Knowledge (Failure Handling) and is surfaced to the human, never silently resolved in either direction.
 
 ### 3. Determine Bootstrap's Authorized Scope
 
 Establish, at the level Bootstrap itself operates at, what this project's Bootstrap run will actually Scaffold, Configure, Lock Dependencies, and Validate — for example whether a UI foundation is in scope, which runtime and package manager apply, and the top-level component or module shape. This scope is the fixed reference point for every materiality decision in Step 4; do not expand it to a hypothetical future or out-of-scope subsystem (`workflows/bootstrap.md`'s own rule against blocking on decisions needed only by future or out-of-scope subsystems applies here too).
+
+If Inspect and Reconcile leave the project's basic purpose genuinely undetermined — most plausible for a new project with little or no existing evidence — this scope cannot yet be determined either. Ask the human directly, in this same session, what they are trying to build (`Failure Handling` → Insufficient Initial Intent), and proceed with this step once a coherent, even minimal, purpose is established. This gap is expected for a new project; it is not itself grounds to report `BLOCKED`.
 
 ### 4. Classify Unknowns
 
@@ -128,6 +130,7 @@ Remaining unresolved (BLOCKED only):
 
 ## Rules
 
+- A repository or stated intent that is initially thin or entirely absent is not itself grounds for `BLOCKED` — ask the human directly, in this same interactive session, and continue this same workflow with the answer. Report `BLOCKED` only once a genuine material decision remains unresolved after asking, or another genuine blocker applies (`Failure Handling`) — never merely because information was insufficient before asking.
 - Never invent a project-wide product, domain, architecture, stack, convention, or design decision.
 - Judge materiality only against the scope determined in Step 3 and Bootstrap's own Scaffold, Configure, Lock Dependencies, and Validate responsibilities (`workflows/bootstrap.md`) — never against template completeness.
 - Ask the human only about material unknowns; do not force exhaustive upfront design or complete a template merely to make it look finished.
@@ -144,7 +147,7 @@ Remaining unresolved (BLOCKED only):
 
 ### Insufficient Initial Intent
 
-The stated intent is too thin to identify even the material unknowns. Ask a small set of clarifying questions about purpose, primary users, and core capability rather than inventing them; do not advance toward approval until a coherent, if minimal, purpose is established.
+The stated intent — or, for a new project, the repository itself — is too thin to identify even the material unknowns. This is expected for a greenfield project and is not, on its own, a failure of this workflow: ask a small set of clarifying questions about purpose, primary users, and core capability directly in this session, rather than inventing them or reporting `BLOCKED` for this alone. Continue this same workflow — resuming at Step 3 — once a coherent, if minimal, purpose is established; do not advance to Step 10 (Confirm Record Accuracy) until it is.
 
 ### Contradictory Existing Knowledge
 

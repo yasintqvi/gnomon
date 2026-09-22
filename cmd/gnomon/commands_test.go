@@ -49,6 +49,17 @@ func TestProjectCommands_RejectArgs(t *testing.T) {
 	}
 }
 
+// TestDescribeCmd_NonInteractive_NeverHangs proves gnomon describe never blocks on stdin —
+// describeCmd.RunE returns promptly (here: refused for lack of a Gnomon project at the test
+// process's own working directory) in the normal non-interactive shape (go test's own stdin,
+// CI, scripted use), mirroring TestSpecCmd_NonInteractive_RefusesRatherThanHangs's same proof
+// for spec.
+func TestDescribeCmd_NonInteractive_NeverHangs(t *testing.T) {
+	if err := describeCmd.RunE(describeCmd, nil); err == nil {
+		t.Fatalf("expected a non-interactive invocation with no project here to be refused")
+	}
+}
+
 // TestWorkflowCommands_NoLongerRegisteredAsTopLevel proves implement/test/verify/review/finalize
 // (and spec discover/spec define) have no dedicated top-level command: each is a Contract-driven
 // Agent workflow with no Human-exclusive or non-Contract-representable operation of its own, so

@@ -68,6 +68,13 @@ func Implement(root, specID, agentOverride string, chooser AgentChooser) (*prese
 // "describe" is only the Human-facing CLI verb (cli/COMMAND_SURFACE.md), never a separate
 // workflow. It takes no target: the Contract declares specification_reference: none, and Core's
 // text never names any Specification this workflow depends on.
+//
+// describe hands control to the Agent with no CLI-collected input beyond the ordinary invocation
+// context: the workflow itself is responsible for inspecting available evidence and asking the
+// Human directly, inside the same interactive session, when material project knowledge cannot be
+// established from it — see Initial Knowledge Establishment's own Execution steps. The CLI does
+// not attempt to classify a project as "new" or "existing" beforehand; that judgment belongs to
+// the Agent, which can actually inspect the repository.
 func Describe(root, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	rep, err := runNoTargetWorkflow(root, "initial-knowledge-establishment.md", agentOverride, chooser)
 	onboardingNext(rep, "gnomon bootstrap")
