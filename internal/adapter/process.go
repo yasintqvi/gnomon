@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 // processAdapter is the Terminal Handoff mechanism every current Adapter implementation shares:
@@ -57,12 +58,22 @@ func (a *processAdapter) Status() Status { return a.status }
 // Gnomon ends the session itself once the result is detected and validated, and this exact text
 // is used unchanged regardless of which Agent is executing it.
 func buildPrompt(ctx Context) string {
-	context := ""
+	var context strings.Builder
 	switch {
 	case ctx.SpecIdentity != "":
-		context = fmt.Sprintf("\nThe governing Specification is: %s\n", ctx.SpecIdentity)
+		fmt.Fprintf(&context, "\nThe governing Specification is: %s\n", ctx.SpecIdentity)
 	case ctx.Target != "":
-		context = fmt.Sprintf("\nThe target for this run is: %s\n", ctx.Target)
+		fmt.Fprintf(&context, "\nThe target for this run is: %s\n", ctx.Target)
+	}
+	// Independent of the switch above: a Handoff is orthogonal to SpecIdentity/Target (it can
+	// accompany either, or neither), so it is appended rather than folded into the same case.
+	// Framed explicitly as context for why this run started, never as a substitute for this
+	// workflow's own normal target/eligibility requirements — those are what SpecIdentity/Target
+	// above, set completely independently, already express.
+	if ctx.Handoff != nil {
+		fmt.Fprintf(&context, "\nThis run was launched to resolve a finding from an earlier %s of %s. Address it while following this workflow's own normal process — the finding explains why this run started; it does not replace this workflow's own target or requirements. If resolving it requires a Human decision or any other material input, ask the Human directly in this session:\n\nFinding: %s — %s\nSummary: %s\nEvidence: %s\n",
+			ctx.Handoff.OriginWorkflow, ctx.Handoff.OriginTarget, ctx.Handoff.FindingID, ctx.Handoff.Classification, ctx.Handoff.Summary, ctx.Handoff.Evidence)
+		fmt.Fprintf(&context, "\nObjective: address this finding while following the %s workflow's own process.\n", ctx.WorkflowIdentity)
 	}
 	return fmt.Sprintf(`You are executing the Gnomon workflow %q for this project.
 
@@ -77,5 +88,5 @@ The JSON object must have exactly this envelope shape:
 The "payload" must conform to the Result Contract declared in this workflow file's own frontmatter (the "result" block at the top of %s) — follow that schema exactly; do not invent fields it does not declare. Write the file exactly once.
 
 Gnomon is watching for that file and will end this session automatically once it appears and validates — you do not need to exit or end the conversation yourself.`,
-		ctx.WorkflowIdentity, ctx.WorkflowPath, context, ctx.ResultPath, ctx.WorkflowIdentity, ctx.RunID, ctx.WorkflowPath)
+		ctx.WorkflowIdentity, ctx.WorkflowPath, context.String(), ctx.ResultPath, ctx.WorkflowIdentity, ctx.RunID, ctx.WorkflowPath)
 }

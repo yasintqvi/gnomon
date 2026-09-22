@@ -111,3 +111,60 @@ func TestBuildPrompt_SpecIdentityTakesPrecedenceOverTarget(t *testing.T) {
 		t.Fatalf("did not expect Target to also render when SpecIdentity is set, got:\n%s", prompt)
 	}
 }
+
+// TestBuildPrompt_HandoffCarriesTheFindingThatCausedThisRun proves a resolution Agent invocation
+// actually receives the finding that caused it to be launched — the mechanism the interactive
+// finding-resolution loop relies on so a fresh Agent process never loses that context.
+func TestBuildPrompt_HandoffCarriesTheFindingThatCausedThisRun(t *testing.T) {
+	ctx := Context{
+		WorkflowIdentity: "implementation", WorkflowPath: "x", ResultPath: "y", RunID: "z",
+		SpecIdentity: "SPEC-014",
+		Handoff: &ResolutionHandoff{
+			OriginWorkflow: "review", OriginTarget: "src/billing/",
+			FindingID: "F-001", Classification: "DEFECT",
+			Summary: "Refund does not release inventory reservation.", Evidence: "Reservation remains active after refund completion.",
+		},
+	}
+	prompt := buildPrompt(ctx)
+	for _, want := range []string{
+		"earlier review of src/billing/",
+		"Finding: F-001 — DEFECT",
+		"Refund does not release inventory reservation.",
+		"Reservation remains active after refund completion.",
+		"following the implementation workflow's own process",
+		"governing Specification is: SPEC-014",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("expected prompt to contain %q, got:\n%s", want, prompt)
+		}
+	}
+}
+
+func TestBuildPrompt_NilHandoff_NoHandoffText(t *testing.T) {
+	ctx := Context{WorkflowIdentity: "implementation", WorkflowPath: "x", ResultPath: "y", RunID: "z", SpecIdentity: "SPEC-014"}
+	prompt := buildPrompt(ctx)
+	if strings.Contains(prompt, "launched to resolve a finding") {
+		t.Fatalf("did not expect handoff framing when Handoff is nil, got:\n%s", prompt)
+	}
+}
+
+// TestBuildPrompt_HandoffTellsTheAgentToAskTheHumanDirectly proves the resolution Agent is told,
+// in-prompt, to ask the Human directly for any material decision it needs — the mechanism Model B
+// relies on instead of the CLI pre-collecting a Human decision before dispatch.
+func TestBuildPrompt_HandoffTellsTheAgentToAskTheHumanDirectly(t *testing.T) {
+	ctx := Context{
+		WorkflowIdentity: "knowledge-resolution", WorkflowPath: "x", ResultPath: "y", RunID: "z",
+		Handoff: &ResolutionHandoff{
+			OriginWorkflow: "review", OriginTarget: "src/billing/",
+			FindingID: "F-002", Classification: "RISK",
+			Summary: "Retried without idempotency key.",
+		},
+	}
+	prompt := buildPrompt(ctx)
+	if !strings.Contains(prompt, "ask the Human directly in this session") {
+		t.Fatalf("expected the prompt to direct the Agent to ask the Human directly, got:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "Human Decision:") {
+		t.Fatalf("did not expect a CLI-collected Human Decision line — the Agent asks in-session, got:\n%s", prompt)
+	}
+}

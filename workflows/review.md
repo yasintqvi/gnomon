@@ -56,10 +56,15 @@ result:
               type:
                 - boolean
                 - "null"
-            recommended_next_workflow:
+            recommended_workflow:
               type:
                 - string
                 - "null"
+              enum:
+                - implementation
+                - testing
+                - knowledge-resolution
+                - null
       summary:
         type: object
         required:
@@ -140,13 +145,17 @@ A dependency whose Target Presence is `MISSING` is ordinarily a `KNOWLEDGE GAP` 
 
 Only `DEFECT`, `RISK`, and `KNOWLEDGE GAP` create actionable findings. Consolidate observations with one underlying issue unless they require independent resolution.
 
-Each finding receives a stable report-local ID (`F-001`, `F-002`, ...), evidence, reasoning, impact, Resolution Owner, Decision Required status, and recommended next workflow.
+Each finding receives a stable report-local ID (`F-001`, `F-002`, ...), evidence, reasoning, impact, Resolution Owner, Decision Required status, and a Recommended Workflow.
 
 ### 6. Determine Resolution Path
 
-Identify the artifact or implementation area that owns resolution, such as Implementation, Specification, Domain, Project, Architecture, ADR, Stack, Conventions, Design Knowledge, Contract, Workflow, Evaluation, or Documentation.
+Identify the artifact or implementation area that owns resolution — the Resolution Owner — such as Implementation, Specification, Domain, Project, Architecture, ADR, Stack, Conventions, Design Knowledge, Contract, Workflow, Evaluation, or Documentation. This is free-form: name whatever actually owns the knowledge or artifact in question.
 
-Set `Decision Required: Yes` when resolution requires new or changed authoritative knowledge. Review may describe the required resolution category but must not design or approve the solution.
+Separately, set Recommended Workflow to whichever one of Gnomon's own dispatchable workflows is the natural next step for a Human to authorize: `implementation` when resolving this finding requires an implementation change; `testing` when it requires additional testing evidence; `knowledge-resolution` when resolution requires a human decision, judgment call, or anything else that touches authoritative project knowledge — including a RISK the Human may simply choose to accept, since confirming and recording (or explicitly declining to record) that decision is itself Knowledge Resolution's own job. Recommended Workflow is a fixed, closed vocabulary naming an actual workflow Gnomon can launch — never a free-form name, and never a placeholder for "no workflow applies." Leave it unset only when none of these three genuinely fits the finding.
+
+Recommended Workflow is determined from the finding's actual classification, evidence, and reasoning — never mechanically from classification alone. Two findings with the same classification may legitimately warrant different recommendations; for example, one DEFECT may need `implementation` while another DEFECT — actually a conflict between two authoritative documents — needs `knowledge-resolution` instead.
+
+Set `Decision Required: Yes` when resolution requires new or changed authoritative knowledge. This is independent of Recommended Workflow: it signals that a material Human decision is involved, not which workflow handles it. Review may recommend a workflow and describe the required resolution category but must not design, approve, or perform the solution — recommending is not authorizing.
 
 ## Outputs
 
@@ -161,7 +170,7 @@ Engineering Reasoning:
 Impact:
 Resolution Owner:
 Decision Required: Yes | No
-Recommended Next Workflow:
+Recommended Workflow: implementation | testing | knowledge-resolution
 ```
 
 **Review Summary** — one block per run, mechanically derived from the findings above:
@@ -194,7 +203,7 @@ Continue where evidence is sufficient, identify confidence limits, and recommend
 
 ### Missing or Conflicting Knowledge
 
-Identify the owning or conflicting sources and apply established ownership or precedence rules. If the issue remains material, produce a `KNOWLEDGE GAP`, name the Resolution Owner, mark whether a decision is required, and set Recommended Next Workflow to [`workflows/knowledge-resolution.md`](knowledge-resolution.md) when a human decision is expected to resolve it.
+Identify the owning or conflicting sources and apply established ownership or precedence rules. If the issue remains material, produce a `KNOWLEDGE GAP`, name the Resolution Owner, mark whether a decision is required, and set Recommended Workflow to `knowledge-resolution` when a human decision is expected to resolve it.
 
 ### Insufficient Technical Evidence
 
@@ -202,6 +211,6 @@ Identify missing evidence, report uncertainty, avoid fabricated conclusions, and
 
 ## Completion Criteria
 
-Review is complete when all applicable questions have been evaluated; Verification Evidence has been reused where relevant; actionable findings have stable IDs, owners, decision status, and next workflows; dependency-state concerns have been classified using the existing outcome vocabulary rather than a new one; the reported `Aggregate` accurately reflects the findings; material uncertainty is reported; and neither implementation nor project knowledge has been changed.
+Review is complete when all applicable questions have been evaluated; Verification Evidence has been reused where relevant; actionable findings have stable IDs, owners, decision status, and a Recommended Workflow from the fixed vocabulary determined from the finding's actual cause rather than its classification alone (left unset only when none of the three genuinely fits); dependency-state concerns have been classified using the existing outcome vocabulary rather than a new one; the reported `Aggregate` accurately reflects the findings; material uncertainty is reported; and neither implementation nor project knowledge has been changed.
 
 Verification asks whether objective evidence proves compliance. Review asks whether the artifact exposes a material defect, risk, or knowledge gap. Resolution begins only after authorization and remains a separate responsibility.

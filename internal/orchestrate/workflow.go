@@ -42,6 +42,16 @@ const (
 // Adapter this run will use; orchestration never constructs a ClaudeAdapter or CodexAdapter
 // itself.
 func Implement(root, specID, agentOverride string, chooser AgentChooser) (*present.Report, error) {
+	return implementWithHandoff(root, specID, ResolutionHandoff{}, agentOverride, chooser)
+}
+
+// implementWithHandoff is Implement's sibling for the interactive finding-resolution loop, which
+// is the only caller that ever supplies a non-empty ResolutionHandoff (cmd/gnomon, via
+// RunResolutionWorkflow). Implement's own eligibility logic — in particular the Approved-
+// Specification gate — is unchanged and unduplicated: it lives here exactly once, and Implement
+// is now a one-line delegator to this with a zero-value handoff, so every existing caller and
+// test is unaffected.
+func implementWithHandoff(root, specID string, handoff ResolutionHandoff, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	l, wf, elig, err := prepareImplementation(root, specID)
 	if err != nil {
 		return nil, err
@@ -59,7 +69,7 @@ func Implement(root, specID, agentOverride string, chooser AgentChooser) (*prese
 	}
 
 	workflowPath := filepath.Join(l.WorkflowsDir(), "implementation.md")
-	return runWorkflow(root, l, wf, workflowPath, targetSpec, specID, agentOverride, chooser)
+	return runResolutionAgent(root, l, wf, workflowPath, targetSpec, specID, handoff, agentOverride, chooser)
 }
 
 // Describe performs `gnomon describe`, wired directly to Initial Knowledge Establishment
@@ -165,7 +175,23 @@ func SpecDefine(root, specID, agentOverride string, chooser AgentChooser) (*pres
 // Testing is deliberately kept distinct from Verification: they are separate Contract files
 // invoked by separate commands, and nothing here invokes one from the other automatically.
 func Test(root, specID, agentOverride string, chooser AgentChooser) (*present.Report, error) {
-	return runTargetedWorkflow(root, "testing.md", targetSpec, specID, agentOverride, chooser)
+	return testWithHandoff(root, specID, ResolutionHandoff{}, agentOverride, chooser)
+}
+
+// testWithHandoff is Test's sibling for the interactive finding-resolution loop — the only
+// caller that ever supplies a non-empty ResolutionHandoff. Test's own eligibility (facts.Eligible
+// applied to testing.md's own specification_reference: optional / requires_approved_specification:
+// true) is unchanged: this reproduces runTargetedWorkflow's own prepare-then-eligibility-check
+// sequence exactly, just ending in runResolutionAgent instead of runWorkflow so a handoff can be
+// carried when one is supplied; Test is now a one-line delegator with a zero-value handoff, so
+// every existing caller and test is unaffected.
+func testWithHandoff(root, specID string, handoff ResolutionHandoff, agentOverride string, chooser AgentChooser) (*present.Report, error) {
+	l, wf, workflowPath, err := prepareWorkflow(root, "testing.md")
+	if err != nil {
+		return nil, err
+	}
+	rep, _, err := runEligibleWorkflowFull(root, l, wf, workflowPath, targetSpec, specID, handoff, agentOverride, chooser)
+	return rep, err
 }
 
 // runNoTargetWorkflow and runGenericTargetWorkflow are two convenience shapes over
@@ -210,9 +236,29 @@ func runTargetedWorkflow(root, filename string, kind targetKind, target, agentOv
 // uniformly; elig.Reason itself (e.g. "SPEC-003 does not exist", "SPEC-003 is not Approved")
 // already states plainly what to do next.
 func runEligibleWorkflow(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target, agentOverride string, chooser AgentChooser) (*present.Report, error) {
+	rep, _, err := runEligibleWorkflowWithOutcome(root, l, wf, workflowPath, kind, target, agentOverride, chooser)
+	return rep, err
+}
+
+// runEligibleWorkflowWithOutcome is runEligibleWorkflow's sibling for the one caller that also
+// needs the raw, validated Outcome once execution actually reaches obtainWorkflowOutcome —
+// RunEvaluation, which extracts Verification/Review's own findings from it for the interactive
+// resolution loop (cmd/gnomon). Kept as an addition, not a signature change to
+// runEligibleWorkflow, so every existing caller and test is unaffected; runEligibleWorkflow is
+// now a one-line delegator to this, so the eligibility logic itself still exists exactly once.
+func runEligibleWorkflowWithOutcome(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target, agentOverride string, chooser AgentChooser) (*present.Report, *result.Outcome, error) {
+	return runEligibleWorkflowFull(root, l, wf, workflowPath, kind, target, ResolutionHandoff{}, agentOverride, chooser)
+}
+
+// runEligibleWorkflowFull is runEligibleWorkflowWithOutcome's sibling for callers that also
+// supply a ResolutionHandoff (implementWithHandoff, testWithHandoff, knowledgeResolutionWithHandoff
+// — the interactive finding-resolution loop's own dispatch path). The eligibility logic itself
+// exists exactly once here; runEligibleWorkflowWithOutcome is now a one-line delegator with a
+// zero-value handoff, so every existing caller and test is unaffected.
+func runEligibleWorkflowFull(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, handoff ResolutionHandoff, agentOverride string, chooser AgentChooser) (*present.Report, *result.Outcome, error) {
 	elig, err := facts.Eligible(l, wf, target)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !elig.Eligible {
 		return &present.Report{
@@ -222,10 +268,10 @@ func runEligibleWorkflow(root string, l project.Layout, wf contract.Workflow, wo
 			Sections: []present.Section{
 				{Label: "Unresolved", Body: elig.Reason},
 			},
-		}, fmt.Errorf("ineligible: %s", elig.Reason)
+		}, nil, fmt.Errorf("ineligible: %s", elig.Reason)
 	}
 
-	return runWorkflow(root, l, wf, workflowPath, kind, target, agentOverride, chooser)
+	return runWorkflowFull(root, l, wf, workflowPath, kind, target, handoff, agentOverride, chooser)
 }
 
 // Run performs `gnomon run <workflow-identity> [target]` — reaching any workflow by its own
@@ -241,24 +287,41 @@ func runEligibleWorkflow(root string, l project.Layout, wf contract.Workflow, wo
 // specification_reference value would. From there this reduces to the identical
 // runEligibleWorkflow → runWorkflow → runWorkflowWithAdapter chain every dedicated command uses.
 func Run(root, workflowIdentity, target, agentOverride string, chooser AgentChooser) (*present.Report, error) {
+	rep, _, err := RunEvaluation(root, workflowIdentity, target, agentOverride, chooser)
+	return rep, err
+}
+
+// RunEvaluation is Run's sibling for the one caller (cmd/gnomon's `gnomon run`) that also needs
+// Verification/Review's own actionable findings, extracted from the run's validated payload via
+// ActionableFindings, so it can offer the interactive resolution loop without this package
+// leaking Result Contract payload shape into cmd/gnomon. findings is always nil for every
+// workflow identity other than "verification"/"review", and for those two whenever the result
+// itself has nothing actionable (a clean PASS) — never treated as an error either way. Run is now
+// a one-line delegator to this, so every other identity's behavior through `gnomon run` is
+// byte-for-byte unchanged.
+func RunEvaluation(root, workflowIdentity, target, agentOverride string, chooser AgentChooser) (*present.Report, []EvaluationFinding, error) {
 	l, err := project.Locate(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	v, err := l.ContractVersion()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if v != project.SupportedContractVersion {
-		return nil, fmt.Errorf("project contract version %q is not supported by this CLI (supports %q)", v, project.SupportedContractVersion)
+		return nil, nil, fmt.Errorf("project contract version %q is not supported by this CLI (supports %q)", v, project.SupportedContractVersion)
 	}
 
 	wf, workflowPath, err := resolveWorkflowByIdentity(l, workflowIdentity)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return runEligibleWorkflow(root, l, wf, workflowPath, targetKindFor(wf), target, agentOverride, chooser)
+	rep, outcome, err := runEligibleWorkflowWithOutcome(root, l, wf, workflowPath, targetKindFor(wf), target, agentOverride, chooser)
+	if outcome == nil {
+		return rep, nil, err
+	}
+	return rep, ActionableFindings(wf.Identity, outcome.Payload), err
 }
 
 // targetKindFor derives how Run should treat a workflow's target purely from its own Contract:
@@ -379,6 +442,22 @@ func implementWithAdapter(root string, l project.Layout, wf contract.Workflow, s
 // CodexAdapter directly — and, once resolved, hands off to runWorkflowWithAdapter for the shared
 // prepare/run/consume/classify/render lifecycle every one of these commands shares.
 func runWorkflow(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target, agentOverride string, chooser AgentChooser) (*present.Report, error) {
+	rep, _, err := runWorkflowWithOutcome(root, l, wf, workflowPath, kind, target, agentOverride, chooser)
+	return rep, err
+}
+
+// runWorkflowWithOutcome is runWorkflow's sibling for RunEvaluation, the one caller that also
+// needs the raw Outcome once an Agent is actually resolved and run. runWorkflow is now a
+// one-line delegator to this, so the Agent-resolution logic itself still exists exactly once.
+func runWorkflowWithOutcome(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target, agentOverride string, chooser AgentChooser) (*present.Report, *result.Outcome, error) {
+	return runWorkflowFull(root, l, wf, workflowPath, kind, target, ResolutionHandoff{}, agentOverride, chooser)
+}
+
+// runWorkflowFull is runWorkflowWithOutcome's sibling for callers that also supply a
+// ResolutionHandoff. The Agent-resolution logic itself exists exactly once here;
+// runWorkflowWithOutcome is now a one-line delegator with a zero-value handoff, so every existing
+// caller and test is unaffected.
+func runWorkflowFull(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, handoff ResolutionHandoff, agentOverride string, chooser AgentChooser) (*present.Report, *result.Outcome, error) {
 	ad, err := ResolveAgent(agentOverride, chooser)
 	if err != nil {
 		return &present.Report{
@@ -389,10 +468,19 @@ func runWorkflow(root string, l project.Layout, wf contract.Workflow, workflowPa
 				{Label: "Reason", Body: err.Error()},
 			},
 			Next: "Pass --agent claude|codex, or run `gnomon agent set-default <claude|codex>`.",
-		}, err
+		}, nil, err
 	}
 
-	return runWorkflowWithAdapter(root, l, wf, workflowPath, kind, target, ad)
+	return runWorkflowWithAdapterFull(root, l, wf, workflowPath, kind, target, handoff, ad)
+}
+
+// runResolutionAgent is runWorkflowFull's 2-return-value convenience for resolution dispatch
+// (implementWithHandoff, testWithHandoff), which never needs the raw Outcome the way
+// RunEvaluation does — a resolution workflow's own result is rendered and shown, never mined for
+// findings.
+func runResolutionAgent(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, handoff ResolutionHandoff, agentOverride string, chooser AgentChooser) (*present.Report, error) {
+	rep, _, err := runWorkflowFull(root, l, wf, workflowPath, kind, target, handoff, agentOverride, chooser)
+	return rep, err
 }
 
 // runWorkflowWithAdapter is the generic execution lifecycle every Agent-invoking command in this
@@ -406,11 +494,32 @@ func runWorkflow(root string, l project.Layout, wf contract.Workflow, workflowPa
 // and workflowPath is always the caller's own already-resolved path — never reconstructed from
 // wf.Identity here.
 func runWorkflowWithAdapter(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, ad adapter.Adapter) (*present.Report, error) {
-	outcome, detail, failureRep, err := obtainWorkflowOutcome(root, l, wf, workflowPath, kind, target, ad)
+	rep, _, err := runWorkflowWithAdapterAndOutcome(root, l, wf, workflowPath, kind, target, ad)
+	return rep, err
+}
+
+// runWorkflowWithAdapterAndOutcome is runWorkflowWithAdapter's sibling, additionally returning
+// the raw validated Outcome — needed only by RunEvaluation (via runWorkflowWithOutcome), which
+// reads Verification/Review's own findings from its payload. runWorkflowWithAdapter is now a
+// one-line delegator to this, so the classify/render lifecycle itself still exists exactly once,
+// and every existing test calling runWorkflowWithAdapter directly against a fake Adapter is
+// unaffected.
+func runWorkflowWithAdapterAndOutcome(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, ad adapter.Adapter) (*present.Report, *result.Outcome, error) {
+	return runWorkflowWithAdapterFull(root, l, wf, workflowPath, kind, target, ResolutionHandoff{}, ad)
+}
+
+// runWorkflowWithAdapterFull is runWorkflowWithAdapterAndOutcome's sibling for callers that also
+// supply a ResolutionHandoff — the classify/render lifecycle exists exactly once here;
+// runWorkflowWithAdapterAndOutcome is now a one-line delegator with a zero-value handoff, so
+// every existing test calling it (or runWorkflowWithAdapter) directly against a fake Adapter is
+// unaffected.
+func runWorkflowWithAdapterFull(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, handoff ResolutionHandoff, ad adapter.Adapter) (*present.Report, *result.Outcome, error) {
+	outcome, detail, failureRep, err := obtainWorkflowOutcomeFull(root, l, wf, workflowPath, kind, target, handoff, ad)
 	if failureRep != nil {
-		return failureRep, err
+		return failureRep, nil, err
 	}
-	return classifyAndRender(wf, target, detail, outcome)
+	rep, err := classifyAndRender(wf, target, detail, outcome)
+	return rep, outcome, err
 }
 
 // obtainWorkflowOutcome runs the Agent and returns its raw, Contract-validated but not yet
@@ -421,6 +530,15 @@ func runWorkflowWithAdapter(root string, l project.Layout, wf contract.Workflow,
 // before generic rendering (Discovery's interactive accept flow) can reuse this exact sequence
 // instead of duplicating it.
 func obtainWorkflowOutcome(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, ad adapter.Adapter) (*result.Outcome, []string, *present.Report, error) {
+	return obtainWorkflowOutcomeFull(root, l, wf, workflowPath, kind, target, ResolutionHandoff{}, ad)
+}
+
+// obtainWorkflowOutcomeFull is obtainWorkflowOutcome's sibling for resolution dispatch — the one
+// place adapter.Context is actually constructed, and the only place a non-empty
+// ResolutionHandoff ever becomes Context.Handoff. obtainWorkflowOutcome is now a one-line
+// delegator with a zero-value handoff (adapterHandoff() returns nil for it), so every existing
+// caller and test is unaffected.
+func obtainWorkflowOutcomeFull(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, handoff ResolutionHandoff, ad adapter.Adapter) (*result.Outcome, []string, *present.Report, error) {
 	runID, err := result.NewRunID()
 	if err != nil {
 		return nil, nil, nil, err
@@ -459,6 +577,7 @@ func obtainWorkflowOutcome(root string, l project.Layout, wf contract.Workflow, 
 	case targetGeneric:
 		ctx.Target = target
 	}
+	ctx.Handoff = handoff.adapterHandoff()
 
 	if err := ad.Prepare(ctx); err != nil {
 		return nil, nil, nil, err

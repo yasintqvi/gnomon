@@ -334,6 +334,8 @@ gnomon run review src/tasks/
 
 The normal Specification workspace stays focused on the actions relevant to the Specification itself; the generic `run` interface is there when you need direct access to a workflow.
 
+When Verification or Review finishes with something to act on, an interactive terminal offers to resolve it right there: it shows you what was found, its own recommendation for how to address it when it has one, and lets you confirm that, choose a different approach, or skip it. Once you're done, Gnomon re-runs the same evaluation fresh, so the result you see is always a real re-check, never the fix's own say-so.
+
 ## The model behind it
 
 The normal workflow is intentionally small:

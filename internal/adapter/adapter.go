@@ -22,6 +22,14 @@ type Context struct {
 	ResultPath string
 	RunID      string
 
+	// Handoff carries the finding that caused this run to be launched, when this invocation was
+	// dispatched from Gnomon's interactive Verification/Review finding-resolution loop — nil for
+	// every ordinary invocation. It is transient invocation context only: never persisted, never
+	// part of any Result Contract, gone the moment this one invocation ends. It explains WHY this
+	// run started; it is never a substitute for SpecIdentity/Target above, which remain this
+	// workflow's own, completely independent, normal target and eligibility requirements.
+	Handoff *ResolutionHandoff
+
 	// PollResult is called periodically while the Agent is still running, to check whether a
 	// valid terminal result now exists. It must be safe to call repeatedly and side-effect-free
 	// except for its final, successful call. The Adapter never interprets what "valid" means —
@@ -30,6 +38,17 @@ type Context struct {
 	// no Gnomon semantics live inside the Adapter. May be left nil, in which case the Adapter
 	// simply waits for the process to exit on its own, with no early detection or termination.
 	PollResult func() (ready bool, err error)
+}
+
+// ResolutionHandoff is the finding a resolution Agent invocation was launched to address —
+// carried as plain reference data, never interpreted by this package. See Context.Handoff.
+type ResolutionHandoff struct {
+	OriginWorkflow string // "verification" | "review"
+	OriginTarget   string // the target the originating evaluation ran against
+	FindingID      string // report-local; only meaningful for this one handoff
+	Classification string
+	Summary        string
+	Evidence       string
 }
 
 // Status is the provider/runtime completion information available once a run has ended —

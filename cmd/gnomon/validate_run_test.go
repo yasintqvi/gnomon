@@ -57,6 +57,18 @@ func TestRun_IsRegisteredWithExactSyntax(t *testing.T) {
 	}
 }
 
+// TestRunCmd_Verification_NonInteractive_NeverHangs proves `gnomon run verification <target>`
+// never attempts the interactive finding-resolution menu when stdin is not a real terminal (go
+// test's own stdin, and the normal shape for CI/scripted use) — it returns promptly, here
+// refused for lack of a Gnomon project at the test process's own working directory, exactly as
+// it did before the interactive resolution loop existed. Mirrors
+// TestDescribeCmd_NonInteractive_NeverHangs's same proof for describe.
+func TestRunCmd_Verification_NonInteractive_NeverHangs(t *testing.T) {
+	if err := runCmd.RunE(runCmd, []string{"verification", "src/"}); err == nil {
+		t.Fatalf("expected a non-interactive invocation with no project here to be refused")
+	}
+}
+
 // TestRun_HasAgentFlag proves run accepts the shared --agent override, registered the same way
 // every other Agent-invoking command's already does.
 func TestRun_HasAgentFlag(t *testing.T) {

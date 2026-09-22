@@ -39,6 +39,15 @@ result:
               type:
                 - string
                 - "null"
+            recommended_workflow:
+              type:
+                - string
+                - "null"
+              enum:
+                - implementation
+                - testing
+                - knowledge-resolution
+                - null
       summary:
         type: object
         required:
@@ -120,6 +129,16 @@ Mark an obligation UNVERIFIABLE, rather than PASS or FAIL, when it depends on a 
 
 Record each obligation, authoritative source, result, and supporting evidence. Include artifact locations, commands, tests, runtime observations, or analysis results where useful, and distinguish observed evidence from contextual explanation.
 
+For each obligation whose result is `FAIL` or `UNVERIFIABLE`, also set Recommended Workflow from the same fixed vocabulary Review uses (`implementation`, `testing`, `knowledge-resolution`).
+
+The result alone never determines this. `FAIL` and `UNVERIFIABLE` are each compatible with more than one cause, and two obligations sharing the same result may legitimately warrant different recommendations — a `FAIL` may exist because the target itself does not do what is required, or because the mechanism that produced the failing evidence is itself broken or measuring the wrong thing; an `UNVERIFIABLE` may exist because the evidence needed simply was not gathered, or because the obligation's own authoritative basis is not yet settled. Determine the recommendation from the obligation's actual cause, reasoned from the evidence already gathered in Step 3, not from which of these two results was assigned:
+
+* `implementation` — the evidence itself is trustworthy and shows the target does not do what the obligation requires.
+* `testing` — the obligation's own verification mechanism is missing, inadequate, or could not be exercised, independent of whether the target itself is actually correct.
+* `knowledge-resolution` — the obligation's own authoritative basis is missing, conflicting, or not yet Approved, so the obligation itself cannot yet be confirmed against anything settled — including when the cause does not cleanly fit either of the other two but still ultimately traces back to unsettled authoritative knowledge.
+
+This is still an evidentiary determination of *why* the result is what it is, never a broader engineering assessment, a design suggestion, or a decision about what the obligation itself should require — Review, not Verification, evaluates engineering quality and risk. Leave Recommended Workflow unset for `PASS`, and unset for any `FAIL`/`UNVERIFIABLE` obligation whose cause genuinely fits none of the three.
+
 ## Outputs
 
 **Verification Evidence** — one block per obligation:
@@ -129,6 +148,7 @@ Obligation:
 Source:
 Result: PASS | FAIL | UNVERIFIABLE
 Evidence:
+Recommended Workflow: implementation | testing | knowledge-resolution (FAIL/UNVERIFIABLE only)
 ```
 
 **Verification Summary** — one block per run, mechanically derived from the per-obligation results above:
@@ -152,6 +172,7 @@ Aggregate: PASS | FAIL | UNVERIFIABLE
 * Do not infer runtime or rendered compliance solely from source structure when the obligation depends materially on execution.
 * Do not expand scope merely because additional issues are discovered.
 * Keep evidence suitable for later Review.
+* Determine Recommended Workflow from the obligation's actual cause and the evidence gathered for it — never mechanically from whether the result is `FAIL` or `UNVERIFIABLE` alone (for example, never assume `FAIL` always means `implementation` or `UNVERIFIABLE` always means `testing`), and never as a broader engineering recommendation, a design suggestion, or an assessment of quality or risk; that remains Review's responsibility, not Verification's.
 
 ## Failure Handling
 
@@ -173,4 +194,4 @@ Record the failure, try another objective mechanism when appropriate, and mark t
 
 ## Completion Criteria
 
-Verification is complete when scope and governing knowledge are identified, every applicable traceable obligation has been evaluated using evidence appropriate to that obligation, obligations affected by a `MISSING` or `DRAFT` dependency are marked UNVERIFIABLE rather than blocking the run, unverifiable obligations are explicit, the reported `Aggregate` accurately reflects the per-obligation results, and no engineering conclusions or new project knowledge have been introduced.
+Verification is complete when scope and governing knowledge are identified, every applicable traceable obligation has been evaluated using evidence appropriate to that obligation, obligations affected by a `MISSING` or `DRAFT` dependency are marked UNVERIFIABLE rather than blocking the run, unverifiable obligations are explicit, every `FAIL`/`UNVERIFIABLE` obligation carries a Recommended Workflow from the fixed vocabulary determined from its actual cause rather than its result type (or is left unset when none of the three genuinely fits), the reported `Aggregate` accurately reflects the per-obligation results, and no engineering conclusions or new project knowledge have been introduced.
