@@ -334,7 +334,47 @@ gnomon run review src/tasks/
 
 The normal Specification workspace stays focused on the actions relevant to the Specification itself; the generic `run` interface is there when you need direct access to a workflow.
 
-When Verification or Review finishes with something to act on, an interactive terminal offers to resolve it right there: it shows you what was found, its own recommendation for how to address it when it has one, and lets you confirm that, choose a different approach, or skip it. Once you're done, Gnomon re-runs the same evaluation fresh, so the result you see is always a real re-check, never the fix's own say-so.
+When Verification or Review finds something to act on, it doesn't just report it and stop — the same interactive session offers to resolve it. Each finding may come with a recommended workflow, reasoned from what actually caused it rather than mechanically from its classification or result: two findings that fail for the same reason can still warrant different fixes, and two that fail differently can end up recommending the same one. You stay in control of what happens with it:
+
+```text
+Verification / Review
+  ↓
+Findings, each with a recommended workflow when one applies
+  ↓
+You confirm it, choose a different workflow, or skip it
+  ↓
+Gnomon checks eligibility and launches that workflow
+  ↓
+The Agent resolves it — asking you anything it needs, in the same session
+  ↓
+A fresh Verification / Review reports the current state
+```
+
+For example, a review of the finished feature might turn up something worth fixing:
+
+```text
+$ gnomon run review src/tasks/
+
+! Defect — src/tasks/
+
+Review found 1 finding
+
+F-001  DEFECT
+  Reopening a task doesn't clear its completed_at timestamp
+
+Recommended workflow:
+  Implementation
+
+? What would you like to do?
+
+  ❯ Continue with Implementation
+    Choose another workflow
+    Skip
+```
+
+Confirming launches Implementation with this finding as context, the same way it would if you ran it directly — it still requires an Approved Specification. From there, Gnomon's own part is done: the Agent does the actual resolution work, including asking you directly if it needs a decision along the way. Once it finishes, Gnomon reruns Review itself, fresh, rather than taking the fix's own word for it — nothing declares a finding resolved except that new result.
+
+Skipping a finding doesn't accept, waive, or resolve it — it just means nothing is launched for it this time. Findings aren't tracked between runs; each Verification or Review reports the project's current state, not a backlog.
 
 ## The model behind it
 
