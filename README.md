@@ -55,6 +55,8 @@ Then verify the installation:
 gnomon --version
 ```
 
+Later, `gnomon update` downloads and installs the latest stable release in place, without needing to repeat the steps above.
+
 Gnomon works with an external AI coding agent. Use `gnomon agent` to inspect or configure the Agent provider Gnomon should use.
 
 ## Quick start

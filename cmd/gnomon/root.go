@@ -27,6 +27,7 @@ const (
 	groupProject       = "project"
 	groupSpecification = "specification"
 	groupGuidance      = "guidance"
+	groupTool          = "tool"
 	groupAdvanced      = "advanced"
 )
 
@@ -54,6 +55,7 @@ func init() {
 		&cobra.Group{ID: groupProject, Title: "Project:"},
 		&cobra.Group{ID: groupSpecification, Title: "Specification:"},
 		&cobra.Group{ID: groupGuidance, Title: "Guidance / Inspection:"},
+		&cobra.Group{ID: groupTool, Title: "Tool:"},
 		&cobra.Group{ID: groupAdvanced, Title: "Advanced:"},
 	)
 	// Shell completion is a Cobra default, not a designed part of the v1 command surface — kept
