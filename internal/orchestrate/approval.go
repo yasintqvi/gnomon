@@ -16,6 +16,39 @@ import (
 // so orchestration stays testable without real stdin, per Step 6's fallback rule.
 type PromptFunc func(message string) (string, error)
 
+// specWorkspaceNext builds the standard next-step guidance shown after an operation that changed
+// a Specification's lifecycle state: the Human-facing workspace (cli/COMMAND_SURFACE.md's
+// everyday entry point for Specification work), which shows every action the Specification's new
+// state actually makes available — never a dedicated per-workflow command, since none exists for
+// implement/test/define anymore (cli/COMMAND_SURFACE.md's "run Rule"). This is the one place that
+// guidance is built, so every caller renders it identically.
+//
+// When highlightVerb is non-empty, the equivalent explicit `gnomon run <identity> <SPEC-id>`
+// invocation is also shown — but only when SpecActions, re-derived fresh here from the same
+// facts.Eligible every other caller (gnomon next, the workspace) already uses, currently reports
+// that verb Available. This deliberately never hardcodes a lifecycle assumption of its own (e.g.
+// "Approved unlocks Implementation") — the caller names which action would be worth highlighting
+// if it turns out to be available, and this function asks the authoritative source rather than
+// assuming; if SpecActions disagrees, or fails to load, or the verb isn't found at all, only the
+// workspace pointer is shown. That refusal-to-guess is deliberate, not a bug: recommendation code
+// must never become a second, independent source of lifecycle truth.
+func specWorkspaceNext(l project.Layout, specID, highlightVerb string) string {
+	next := fmt.Sprintf("gnomon spec %s\n  View the Specification and available actions.", specID)
+	if highlightVerb == "" {
+		return next
+	}
+	actions, _, err := SpecActions(l, specID)
+	if err != nil {
+		return next
+	}
+	for _, a := range actions {
+		if a.Verb == highlightVerb && a.Available {
+			return next + fmt.Sprintf("\n\nAdvanced:\n  %s", a.Command)
+		}
+	}
+	return next
+}
+
 // Approve performs `gnomon approve <SPEC-id>` — a deterministic, Human-owned operation. An
 // Agent's own reported result never grants approval; only this explicit action does.
 func Approve(root, specID string, prompt PromptFunc) (*present.Report, error) {
@@ -63,7 +96,7 @@ func Approve(root, specID string, prompt PromptFunc) (*present.Report, error) {
 		Outcome: present.Success,
 		Summary: fmt.Sprintf("%s is now %s", specID, state),
 		Target:  specID,
-		Next:    fmt.Sprintf("gnomon implement %s", specID),
+		Next:    specWorkspaceNext(l, specID, "implement"),
 		Detail:  []string{fmt.Sprintf("approved by: %s", identity)},
 	}, nil
 }
@@ -135,6 +168,9 @@ func Revoke(root, specID string, prompt PromptFunc) (*present.Report, error) {
 		Outcome: present.Success,
 		Summary: fmt.Sprintf("%s is now %s", specID, state),
 		Target:  specID,
-		Detail:  []string{fmt.Sprintf("revoked by: %s", identity)},
+		// No single action is more worth highlighting than another after returning to Draft —
+		// the workspace itself already shows whatever SpecActions currently reports valid.
+		Next:   specWorkspaceNext(l, specID, ""),
+		Detail: []string{fmt.Sprintf("revoked by: %s", identity)},
 	}, nil
 }

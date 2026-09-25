@@ -1,6 +1,13 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/spf13/cobra"
+
+	"gnomon/internal/orchestrate"
+)
 
 // TestProjectCommands_AreRegistered proves gnomon describe/bootstrap remain real, registered
 // Cobra commands — project setup is out of scope for the Specification-centered CLI redesign and
@@ -15,6 +22,73 @@ func TestProjectCommands_AreRegistered(t *testing.T) {
 		if !got[name] {
 			t.Fatalf("expected %q to be registered as a top-level command", name)
 		}
+	}
+}
+
+// recommendedCommandIsRegistered walks the real, live Cobra command tree (rootCmd, and one level
+// of subcommands) and reports whether the command next's first line leads with actually exists —
+// deep enough to catch the class of bug this guards against (a recommendation naming a command
+// that was removed, or misspelling a subcommand like "spec create") without needing to parse or
+// simulate a full invocation. next may be a bare command ("gnomon bootstrap") or a multi-word one
+// ("gnomon spec create \"<title>\""); only the words up to and including the first quoted or
+// placeholder-looking argument are treated as the command path.
+//
+// This only validates the one command the recommendation leads with — it does not parse every
+// command mention that might appear later in a longer sentence (deliberately: doing that without
+// a real argument parser would be exactly the "complicated command parsing" this guard should
+// avoid). Every current recommendation in this codebase names exactly one command, in its own
+// first line, for this reason; TestOnboardingRecommendations_DoNotNameKnownRemovedCommands
+// (internal/orchestrate) is the complementary denylist guard against specific known-stale phrases
+// anywhere in a recommendation's text, including ones this function's leading-command check alone
+// would not reach.
+func recommendedCommandIsRegistered(t *testing.T, next string) bool {
+	t.Helper()
+	firstLine := strings.SplitN(next, "\n", 2)[0]
+	fields := strings.Fields(firstLine)
+	if len(fields) < 2 || fields[0] != "gnomon" {
+		t.Fatalf("expected a recommendation starting with \"gnomon <command>\", got %q", firstLine)
+	}
+
+	cmd, ok := findCommand(rootCmd, fields[1])
+	if !ok {
+		return false
+	}
+	// A second bare word (no leading "<", "\"", or "-") names a registered subcommand too, e.g.
+	// "gnomon spec create". Anything else (a placeholder like <title>, or nothing) means the
+	// recommendation targets cmd itself.
+	if len(fields) >= 3 {
+		second := fields[2]
+		if second[0] != '<' && second[0] != '"' && second[0] != '-' {
+			_, ok = findCommand(cmd, second)
+			return ok
+		}
+	}
+	return true
+}
+
+func findCommand(parent *cobra.Command, name string) (*cobra.Command, bool) {
+	for _, c := range parent.Commands() {
+		if c.Name() == name {
+			return c, true
+		}
+	}
+	return nil, false
+}
+
+// TestDescribeNext_RecommendsARegisteredCommand and TestBootstrapNext_RecommendsARegisteredCommand
+// are the genuine regression guard for the onboarding recommendations orchestrate.DescribeSuccessNext/
+// orchestrate.BootstrapSuccessNext contain: unlike a check against the constant's own text (which
+// cannot tell a valid command from a plausible-looking removed one — that was exactly how
+// "gnomon spec discover" went undetected), this walks the real, currently registered rootCmd tree.
+func TestDescribeNext_RecommendsARegisteredCommand(t *testing.T) {
+	if !recommendedCommandIsRegistered(t, orchestrate.DescribeSuccessNext) {
+		t.Fatalf("orchestrate.DescribeSuccessNext (%q) does not name a currently registered command", orchestrate.DescribeSuccessNext)
+	}
+}
+
+func TestBootstrapNext_RecommendsARegisteredCommand(t *testing.T) {
+	if !recommendedCommandIsRegistered(t, orchestrate.BootstrapSuccessNext) {
+		t.Fatalf("orchestrate.BootstrapSuccessNext (%q) does not name a currently registered command", orchestrate.BootstrapSuccessNext)
 	}
 }
 

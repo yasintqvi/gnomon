@@ -118,6 +118,25 @@ func TestFullSlice_InitCreateApproveImplement(t *testing.T) {
 	}
 }
 
+// TestSpecCreate_NextRecommendsSpecWorkspace proves the guidance shown right after creating a
+// Draft names an actual command for every step, rather than pairing a real "gnomon approve"
+// command with prose ("Define its content...") that named no command for the first step at all.
+func TestSpecCreate_NextRecommendsSpecWorkspace(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := SpecCreate(root, "Password Reset")
+	if err != nil {
+		t.Fatalf("spec create: %v", err)
+	}
+	if !strings.Contains(report.Next, "gnomon spec SPEC-001") {
+		t.Fatalf("expected the Specification workspace recommended, got %q", report.Next)
+	}
+}
+
 // TestImplement_IneligibleNeverResolvesAgent proves the ordering Implement's own doc comment
 // promises: for a Draft Specification, the pre-start eligibility check must refuse before the
 // Agent provider is ever resolved or prompted for — an ineligible invocation must never trigger
@@ -150,6 +169,13 @@ func TestImplement_IneligibleNeverResolvesAgent(t *testing.T) {
 	if chooserCalled {
 		t.Fatalf("the Agent provider must never be resolved or prompted for when the pre-start eligibility check fails")
 	}
+	// Regression guard: this used to assume the block was always "not yet Approved" and
+	// recommend `gnomon approve` directly — wrong whenever elig.Reason is something else, and
+	// paired with prose ("Define %s further") that named no actual command at all. The
+	// Specification workspace is correct regardless of which reason actually applies.
+	if !strings.Contains(report.Next, "gnomon spec SPEC-001") {
+		t.Fatalf("expected the Specification workspace recommended, got %q", report.Next)
+	}
 }
 
 // scriptedAdapter writes a valid result envelope matching whatever run_id/workflow Prepare
@@ -173,6 +199,92 @@ func (s *scriptedAdapter) Prepare(ctx adapter.Context) error {
 	})
 	s.FakeAdapter.ResultContent = env
 	return nil
+}
+
+// TestApprove_NextRecommendsSpecWorkspaceAndImplementation is the direct regression guard for the
+// stale "gnomon implement <SPEC-id>" recommendation this command used to print — that command no
+// longer exists (it is reachable only through the Specification workspace or `gnomon run
+// implementation <SPEC-id>`); this proves the real, current guidance takes its place.
+func TestApprove_NextRecommendsSpecWorkspaceAndImplementation(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Approve(root, "SPEC-001", nil)
+	if err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if !strings.Contains(report.Next, "gnomon spec SPEC-001") {
+		t.Fatalf("expected the Specification workspace recommended, got %q", report.Next)
+	}
+	if !strings.Contains(report.Next, "gnomon run implementation SPEC-001") {
+		t.Fatalf("expected the advanced gnomon run form recommended, got %q", report.Next)
+	}
+	if strings.Contains(report.Next, "gnomon implement ") {
+		t.Fatalf("did not expect the no-longer-registered \"gnomon implement\" command, got %q", report.Next)
+	}
+}
+
+// TestSpecWorkspaceNext_NeverHighlightsAnUnavailableAction is the direct proof that
+// specWorkspaceNext derives its "Advanced:" line from SpecActions' own real eligibility
+// derivation — never from the caller's hint alone. Asking it to highlight "implement" for a
+// Draft Specification (Implementation is never eligible until Approved) must not show it, even
+// though the caller asked for exactly that verb: the caller only names a candidate worth
+// checking, this function is the one place that actually verifies it against authoritative
+// state before ever naming it as a recommendation.
+func TestSpecWorkspaceNext_NeverHighlightsAnUnavailableAction(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+	l, err := project.Locate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	next := specWorkspaceNext(l, "SPEC-001", "implement")
+	if strings.Contains(next, "Advanced:") {
+		t.Fatalf("expected no Advanced line for a Draft Specification (Implementation is not yet eligible), got %q", next)
+	}
+	if !strings.Contains(next, "gnomon spec SPEC-001") {
+		t.Fatalf("expected the workspace pointer still shown, got %q", next)
+	}
+}
+
+// TestSpecWorkspaceNext_HighlightsAvailableAction proves the converse: once the highlighted verb
+// genuinely is Available, per the same SpecActions/facts.Eligible derivation `gnomon next` and
+// the workspace both use, the Advanced line names its real, currently valid command — sourced
+// from SpecAction.Command itself, never reconstructed from a hardcoded identity string here.
+func TestSpecWorkspaceNext_HighlightsAvailableAction(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+		t.Fatal(err)
+	}
+	l, err := project.Locate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	next := specWorkspaceNext(l, "SPEC-001", "implement")
+	if !strings.Contains(next, "Advanced:\n  gnomon run implementation SPEC-001") {
+		t.Fatalf("expected the real gnomon run implementation command, got %q", next)
+	}
 }
 
 func TestApprove_RefusesWhenNoIdentityIsAvailable(t *testing.T) {

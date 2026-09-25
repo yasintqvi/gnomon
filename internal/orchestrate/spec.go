@@ -39,7 +39,7 @@ func createDraftSpec(root, title, slug string) (*present.Report, error) {
 		Outcome: present.Success,
 		Summary: "Created Draft Specification",
 		Target:  string(id),
-		Next:    fmt.Sprintf("Define its content, then `gnomon approve %s` once you judge it ready.", id),
+		Next:    specWorkspaceNext(l, string(id), ""),
 		Detail:  []string{fmt.Sprintf("path: %s", path)},
 	}, nil
 }

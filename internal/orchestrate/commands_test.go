@@ -140,7 +140,7 @@ func TestDescribe_SuccessfulResult_RecommendsBootstrap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("describe: %v (report: %+v)", err, report)
 	}
-	onboardingNext(report, "gnomon bootstrap")
+	onboardingNext(report, DescribeSuccessNext)
 	if report.Next != "gnomon bootstrap" {
 		t.Fatalf("expected a successful describe result to recommend gnomon bootstrap, got %q", report.Next)
 	}
@@ -164,9 +164,28 @@ func TestBootstrap_SuccessfulResult_RecommendsSpecWork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bootstrap: %v (report: %+v)", err, report)
 	}
-	onboardingNext(report, `gnomon spec create "<title>", or gnomon spec discover to have an Agent propose one`)
-	if !strings.Contains(report.Next, "gnomon spec create") || !strings.Contains(report.Next, "gnomon spec discover") {
-		t.Fatalf("expected a successful bootstrap result to recommend both ways to start Specification work, got %q", report.Next)
+	onboardingNext(report, BootstrapSuccessNext)
+	if !strings.Contains(report.Next, "gnomon spec") {
+		t.Fatalf("expected a successful bootstrap result to recommend gnomon spec, got %q", report.Next)
+	}
+}
+
+// TestOnboardingRecommendations_DoNotNameKnownRemovedCommands is a denylist regression guard
+// against the specific stale forms this package's onboarding guidance used to contain (Bootstrap
+// once recommended "gnomon spec discover", which was never a registered command). It proves only
+// what it checks — that these exact known-removed forms are absent — not that whatever command
+// each recommendation does name is currently registered; that stronger claim requires the real
+// Cobra command tree, which only cmd/gnomon has access to (see
+// TestDescribeNext_RecommendsARegisteredCommand / TestBootstrapNext_RecommendsARegisteredCommand
+// in cmd/gnomon's own test package).
+func TestOnboardingRecommendations_DoNotNameKnownRemovedCommands(t *testing.T) {
+	removedForms := []string{"spec discover", "spec define", "gnomon implement", "gnomon finalize", "gnomon test ", "gnomon verify", "gnomon review"}
+	for _, next := range []string{DescribeSuccessNext, BootstrapSuccessNext} {
+		for _, stale := range removedForms {
+			if strings.Contains(next, stale) {
+				t.Fatalf("recommendation %q names the known-removed form %q", next, stale)
+			}
+		}
 	}
 }
 

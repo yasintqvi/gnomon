@@ -28,8 +28,13 @@ func TestNext_ZeroSpecifications_SuggestsDiscoveryOrCreate(t *testing.T) {
 		t.Fatalf("expected Success, got %v", report.Outcome)
 	}
 	rendered := present.Render(report, false)
-	if !strings.Contains(rendered, "spec discover") || !strings.Contains(rendered, "spec create") {
+	if !strings.Contains(rendered, "gnomon spec") || !strings.Contains(rendered, "spec create") {
 		t.Fatalf("expected zero-Specification guidance to name both mechanisms that create one: %s", rendered)
+	}
+	// "gnomon spec discover" was never a real command — Discover is a contextual action inside
+	// the interactive "gnomon spec" browser, not its own subcommand.
+	if strings.Contains(rendered, "spec discover") {
+		t.Fatalf("did not expect the no-longer-registered \"gnomon spec discover\" subcommand form: %s", rendered)
 	}
 }
 
@@ -243,7 +248,7 @@ func TestNext_UncommittedChanges_SuggestsFinalizeAsCoarseSignal(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := present.Render(report, false)
-	if !strings.Contains(rendered, "gnomon finalize") {
+	if !strings.Contains(rendered, "gnomon run git-finalization") {
 		t.Fatalf("expected uncommitted changes to surface a coarse Git Finalization signal, per cli/DERIVED_FACTS.md: %s", rendered)
 	}
 }
@@ -261,7 +266,7 @@ func TestNext_CleanWorkingTree_NoFinalizeSuggestion(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := present.Render(report, false)
-	if strings.Contains(rendered, "gnomon finalize") {
+	if strings.Contains(rendered, "gnomon run git-finalization") {
 		t.Fatalf("did not expect a finalize suggestion when the working tree is clean: %s", rendered)
 	}
 }

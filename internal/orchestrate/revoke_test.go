@@ -57,6 +57,32 @@ func TestRevoke_ApprovedBecomesNonApproved(t *testing.T) {
 	}
 }
 
+// TestRevoke_NextRecommendsSpecWorkspace proves Revoke points at the Specification workspace
+// rather than any dedicated command — there is no dedicated "define" command to name, and no
+// single workflow is uniquely unlocked by returning to Draft the way Approved uniquely unlocks
+// Implementation.
+func TestRevoke_NextRecommendsSpecWorkspace(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Revoke(root, "SPEC-001", nil)
+	if err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+	if !strings.Contains(report.Next, "gnomon spec SPEC-001") {
+		t.Fatalf("expected the Specification workspace recommended, got %q", report.Next)
+	}
+}
+
 func TestRevoke_SpecificationContentUnmodified(t *testing.T) {
 	root := t.TempDir()
 	configureGitIdentity(t, root)

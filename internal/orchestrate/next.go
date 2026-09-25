@@ -54,7 +54,7 @@ func Next(root string) (*present.Report, error) {
 
 	if len(summaries) == 0 {
 		rep.Summary = "No Specifications exist yet"
-		rep.AddSection("Specifications", "None exist yet. `gnomon spec discover` or `gnomon spec create \"<title>\"` can create one.")
+		rep.AddSection("Specifications", "None exist yet. `gnomon spec` can create one directly or have an Agent propose one (Discover); `gnomon spec create \"<title>\"` is the non-interactive equivalent.")
 	} else {
 		rep.Summary = fmt.Sprintf("Valid actions for %d Specification(s), by identity — no priority implied", len(summaries))
 		unreadableAll = map[string]bool{}
@@ -106,7 +106,7 @@ func Next(root string) (*present.Report, error) {
 	case !gitStatus.Available:
 		rep.AddSection("Working Tree", "Not a Git repository — Git Finalization is not applicable here.")
 	case gitStatus.Changed:
-		rep.AddSection("Working Tree", "Uncommitted changes are present — `gnomon finalize` may be worth considering when you judge the work ready.")
+		rep.AddSection("Working Tree", "Uncommitted changes are present — `gnomon run git-finalization` may be worth considering when you judge the work ready.")
 	}
 
 	return rep, nil

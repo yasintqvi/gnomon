@@ -64,13 +64,36 @@ func implementWithHandoff(root, specID string, handoff ResolutionHandoff, agentO
 			Sections: []present.Section{
 				{Label: "Unresolved", Body: elig.Reason},
 			},
-			Next: fmt.Sprintf("Define %s further, or `gnomon approve %s` if you judge it ready.", specID, specID),
+			// The specific reason (already shown above) may be anything facts.Eligible checks —
+			// not approved yet, not found, an unsupported Contract version — so this points at
+			// the workspace rather than assuming which one it is and naming a specific next
+			// action that might not actually apply.
+			Next: specWorkspaceNext(l, specID, ""),
 		}, fmt.Errorf("ineligible: %s", elig.Reason)
 	}
 
 	workflowPath := filepath.Join(l.WorkflowsDir(), "implementation.md")
 	return runResolutionAgent(root, l, wf, workflowPath, targetSpec, specID, handoff, agentOverride, chooser)
 }
+
+// DescribeSuccessNext and BootstrapSuccessNext are the one place each onboarding recommendation's
+// text is written — Describe/Bootstrap below, their own tests, and cmd/gnomon's own registered-
+// command cross-check (TestBootstrapNext/TestDescribeNext_RecommendARegisteredCommand) all
+// reference these exported constants rather than each hardcoding a separate copy, specifically so
+// they can never silently drift apart the way Bootstrap's own recommendation once did (it named a
+// "gnomon spec discover" command that no longer exists, undetected because its own test asserted
+// against its own duplicated copy of the same stale literal rather than a shared source, and
+// neither was ever checked against the real registered CLI command tree).
+//
+// Both name only a bare command (describe→bootstrap, bootstrap→spec): onboarding is the one case
+// where the next step is fixed by the onboarding sequence itself (cli/PROJECT_INITIALIZATION.md),
+// not by a Specification's own derived eligibility — unlike specWorkspaceNext, there is no
+// SpecActions-style authoritative source to derive an onboarding step from, so this remains a
+// plain constant rather than something computed.
+const (
+	DescribeSuccessNext  = "gnomon bootstrap"
+	BootstrapSuccessNext = "gnomon spec\n  Create a Specification directly, or have an Agent propose one (Discover)."
+)
 
 // Describe performs `gnomon describe`, wired directly to Initial Knowledge Establishment
 // (workflows/initial-knowledge-establishment.md) — Core's own workflow identity and the sole
@@ -87,7 +110,7 @@ func implementWithHandoff(root, specID string, handoff ResolutionHandoff, agentO
 // the Agent, which can actually inspect the repository.
 func Describe(root, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	rep, err := runNoTargetWorkflow(root, "initial-knowledge-establishment.md", agentOverride, chooser)
-	onboardingNext(rep, "gnomon bootstrap")
+	onboardingNext(rep, DescribeSuccessNext)
 	return rep, err
 }
 
@@ -97,7 +120,7 @@ func Describe(root, agentOverride string, chooser AgentChooser) (*present.Report
 // responsibility is folded into the other here.
 func Bootstrap(root, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	rep, err := runNoTargetWorkflow(root, "bootstrap.md", agentOverride, chooser)
-	onboardingNext(rep, `gnomon spec create "<title>", or gnomon spec discover to have an Agent propose one`)
+	onboardingNext(rep, BootstrapSuccessNext)
 	return rep, err
 }
 
