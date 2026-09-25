@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/gnomon.png" alt="Gnomon logo" width="190" />
+  <img src="assets/gnomon-logo.png" alt="Gnomon logo" width="190" />
 </p>
 
 <h1 align="center">Gnomon</h1>
