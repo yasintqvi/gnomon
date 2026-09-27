@@ -2,6 +2,8 @@ package orchestrate
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"gnomon/internal/approval"
@@ -16,22 +18,42 @@ import (
 // so orchestration stays testable without real stdin, per Step 6's fallback rule.
 type PromptFunc func(message string) (string, error)
 
-// specWorkspaceNext builds the standard next-step guidance shown after an operation that changed
-// a Specification's lifecycle state: the Human-facing workspace (cli/COMMAND_SURFACE.md's
-// everyday entry point for Specification work), which shows every action the Specification's new
-// state actually makes available — never a dedicated per-workflow command, since none exists for
-// implement/test/define anymore (cli/COMMAND_SURFACE.md's "run Rule"). This is the one place that
-// guidance is built, so every caller renders it identically.
-//
-// When highlightVerb is non-empty, the equivalent explicit `gnomon run <identity> <SPEC-id>`
-// invocation is also shown — but only when SpecActions, re-derived fresh here from the same
-// facts.Eligible every other caller (gnomon next, the workspace) already uses, currently reports
-// that verb Available. This deliberately never hardcodes a lifecycle assumption of its own (e.g.
-// "Approved unlocks Implementation") — the caller names which action would be worth highlighting
-// if it turns out to be available, and this function asks the authoritative source rather than
-// assuming; if SpecActions disagrees, or fails to load, or the verb isn't found at all, only the
-// workspace pointer is shown. That refusal-to-guess is deliberate, not a bug: recommendation code
-// must never become a second, independent source of lifecycle truth.
+// ConfirmFunc presents a non-blocking warning to the Human and reports whether to proceed anyway.
+// The command layer owns how (and whether) this actually prompts, so orchestration itself never
+// touches a terminal. A nil ConfirmFunc skips the check silently, same as a missing template.
+type ConfirmFunc func(warning string) (bool, error)
+
+// placeholderWarning renders the Human-facing warning for a Specification that still contains
+// template placeholders: how many, up to 5 of them, and a nudge toward Define.
+func placeholderWarning(specID string, remaining []string) string {
+	n := len(remaining)
+	shown := remaining
+	more := 0
+	if n > 5 {
+		shown = remaining[:5]
+		more = n - 5
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s still contains %d template placeholder", specID, n)
+	if n != 1 {
+		b.WriteString("s")
+	}
+	b.WriteString(":\n")
+	for _, tok := range shown {
+		fmt.Fprintf(&b, "  %s\n", tok)
+	}
+	if more > 0 {
+		fmt.Fprintf(&b, "  and %d more\n", more)
+	}
+	b.WriteString("Consider running Define before approving.")
+	return b.String()
+}
+
+// specWorkspaceNext builds the standard next-step guidance after an operation that changed a
+// Specification's lifecycle state: a pointer to the workspace (cli/COMMAND_SURFACE.md), plus, when
+// highlightVerb is non-empty and SpecActions (re-derived fresh, never assumed) actually reports it
+// Available, the equivalent `gnomon run` invocation. Never hardcodes a lifecycle assumption of its
+// own — recommendation code must not become a second source of lifecycle truth.
 func specWorkspaceNext(l project.Layout, specID, highlightVerb string) string {
 	next := fmt.Sprintf("gnomon spec %s\n  View the Specification and available actions.", specID)
 	if highlightVerb == "" {
@@ -51,7 +73,11 @@ func specWorkspaceNext(l project.Layout, specID, highlightVerb string) string {
 
 // Approve performs `gnomon approve <SPEC-id>` — a deterministic, Human-owned operation. An
 // Agent's own reported result never grants approval; only this explicit action does.
-func Approve(root, specID string, prompt PromptFunc) (*present.Report, error) {
+func Approve(root, specID string, prompt PromptFunc, confirm ConfirmFunc) (*present.Report, error) {
+	if err := refuseIfRunActive(root); err != nil {
+		return nil, err
+	}
+
 	l, err := project.Locate(root)
 	if err != nil {
 		return nil, err
@@ -70,6 +96,44 @@ func Approve(root, specID string, prompt PromptFunc) (*present.Report, error) {
 		return nil, err
 	}
 	fingerprint := approval.Fingerprint(content)
+
+	// Already Approved for this exact content under "the latest decision counts": refuse before
+	// resolving identity, so a repeated approve never prompts and never writes a redundant grant.
+	// Content matching an older, non-latest grant instead falls through and writes a new one —
+	// that is how the Human returns to an earlier version.
+	_, approved, err := approval.ActiveGrant(l.ApprovalsDir(), specID, fingerprint)
+	if err != nil {
+		return nil, err
+	}
+	if approved {
+		return &present.Report{
+			Outcome: present.Success,
+			Summary: fmt.Sprintf("%s is already Approved", specID),
+			Target:  specID,
+			Next:    specWorkspaceNext(l, specID, "implement"),
+		}, nil
+	}
+
+	// Whether Define was ever reached isn't persisted, so still reading like the untouched template
+	// is the only available signal. Never blocks approval — the Human decides either way.
+	if confirm != nil {
+		templatePath := filepath.Join(l.SpecificationsDir(), "SPEC-000-use-case-name.md")
+		if template, tmplErr := os.ReadFile(templatePath); tmplErr == nil {
+			if remaining := specs.RemainingPlaceholders(template, content); len(remaining) > 0 {
+				proceed, err := confirm(placeholderWarning(specID, remaining))
+				if err != nil {
+					return nil, err
+				}
+				if !proceed {
+					return &present.Report{
+						Outcome: present.Cancelled,
+						Summary: fmt.Sprintf("Approval of %s was cancelled", specID),
+						Target:  specID,
+					}, nil
+				}
+			}
+		}
+	}
 
 	identity, err := gitutil.Identity(root)
 	if err != nil {
@@ -101,17 +165,15 @@ func Approve(root, specID string, prompt PromptFunc) (*present.Report, error) {
 	}, nil
 }
 
-// Revoke performs `gnomon revoke <SPEC-id>` — a deterministic, Human-owned operation, CLI-native
-// and Agent-free, per cli/APPROVAL_RUNTIME.md's Revocation Operation: locate the grant record
-// currently causing this Specification to derive Approved, if any; confirm explicit Human action
-// and attribution; write one new revocation record referencing that specific grant (the grant
-// file itself is never touched); re-derive lifecycle state and report it. If no grant is
-// currently causing Approved — the Specification is already Draft, was never approved, its only
-// grant no longer matches current content, or it has already been revoked — there is nothing to
-// revoke, per the Operation's own "if any" and Core's "a revoked record can never revalidate the
-// Specification" rule; this refuses rather than writing a Revocation record that references
-// nothing currently active.
+// Revoke performs `gnomon revoke <SPEC-id>` — a deterministic, Human-owned, Agent-free operation
+// (cli/APPROVAL_RUNTIME.md, Revocation Operation). Writes one new revocation record per grant
+// currently causing Approved (grant files themselves are never touched). Refuses if nothing is
+// currently Approved, rather than writing a revocation that references nothing active.
 func Revoke(root, specID string, prompt PromptFunc) (*present.Report, error) {
+	if err := refuseIfRunActive(root); err != nil {
+		return nil, err
+	}
+
 	l, err := project.Locate(root)
 	if err != nil {
 		return nil, err
@@ -131,16 +193,26 @@ func Revoke(root, specID string, prompt PromptFunc) (*present.Report, error) {
 	}
 	fingerprint := approval.Fingerprint(content)
 
-	grantID, active, err := approval.ActiveGrantID(l.ApprovalsDir(), specID, fingerprint)
+	// Gated on ActiveGrant (the same rule Derive uses), not a plain fingerprint match: content
+	// matching only an older, non-latest grant is already Draft and has nothing to revoke.
+	_, approved, err := approval.ActiveGrant(l.ApprovalsDir(), specID, fingerprint)
 	if err != nil {
 		return nil, err
 	}
-	if !active {
+	if !approved {
 		return &present.Report{
 			Outcome: present.Blocked,
 			Summary: fmt.Sprintf("%s has no active approval to revoke", specID),
 			Target:  specID,
 		}, fmt.Errorf("%s has no active approval to revoke", specID)
+	}
+
+	// The active grant (L) is always included here, since it is unrevoked and matches
+	// fingerprint by construction; any legacy duplicate grant for the same content is revoked
+	// alongside it, tidying evidence without changing which one L actually is.
+	grantIDs, err := approval.ActiveGrantIDs(l.ApprovalsDir(), specID, fingerprint)
+	if err != nil {
+		return nil, err
 	}
 
 	identity, err := gitutil.Identity(root)
@@ -155,8 +227,21 @@ func Revoke(root, specID string, prompt PromptFunc) (*present.Report, error) {
 		identity = strings.TrimSpace(answer)
 	}
 
-	if err := approval.WriteRevocation(l.ApprovalsDir(), specID, grantID, identity); err != nil {
-		return nil, err
+	var revoked []string
+	for _, grantID := range grantIDs {
+		if err := approval.WriteRevocation(l.ApprovalsDir(), specID, grantID, identity); err != nil {
+			sections := []present.Section{{Label: "Reason", Body: err.Error()}}
+			if len(revoked) > 0 {
+				sections = append(sections, present.Section{Label: "Revoked", Body: strings.Join(revoked, ", ")})
+			}
+			return &present.Report{
+				Outcome:  present.Failed,
+				Summary:  fmt.Sprintf("%s: revocation did not complete", specID),
+				Target:   specID,
+				Sections: sections,
+			}, err
+		}
+		revoked = append(revoked, grantID)
 	}
 
 	state, err := facts.Lifecycle(l, specID)

@@ -47,6 +47,24 @@ func TestShort_FingerprintTruncatedTo12(t *testing.T) {
 	}
 }
 
+func TestFormatApprovalTime_NanosecondPrecision_FormattedToSeconds(t *testing.T) {
+	if got := formatApprovalTime("2024-01-02T15:04:05.123456789Z"); got != "2024-01-02 15:04:05 UTC" {
+		t.Fatalf("unexpected: %q", got)
+	}
+}
+
+func TestFormatApprovalTime_LegacySecondPrecision_FormattedToSeconds(t *testing.T) {
+	if got := formatApprovalTime("2024-01-02T15:04:05Z"); got != "2024-01-02 15:04:05 UTC" {
+		t.Fatalf("unexpected: %q", got)
+	}
+}
+
+func TestFormatApprovalTime_Unparseable_FallsBackToRawString(t *testing.T) {
+	if got := formatApprovalTime("not-a-timestamp"); got != "not-a-timestamp" {
+		t.Fatalf("expected the raw string returned unchanged, got %q", got)
+	}
+}
+
 // --- gnomon spec: registration, args shape, non-interactive behavior ---
 
 func TestSpecCmd_AcceptsZeroOrOneArg(t *testing.T) {
@@ -147,8 +165,8 @@ func TestRenderSpecDetail_Color_LifecycleAndRevisionStatusDistinguished(t *testi
 	if !strings.Contains(out, p.Good("Approved")) {
 		t.Fatalf("expected Approved styled as the positive/complete state, got: %s", out)
 	}
-	if !strings.Contains(out, p.Good("current")) {
-		t.Fatalf("expected the active revision marked 'current' in the same positive style, got: %s", out)
+	if !strings.Contains(out, p.Good("active")) {
+		t.Fatalf("expected the active revision marked 'active' in the same positive style, got: %s", out)
 	}
 	if !strings.Contains(out, p.Bad("revoked")) {
 		t.Fatalf("expected a revoked revision marked in the failure style, got: %s", out)
@@ -175,6 +193,22 @@ func TestRenderSpecDetail_UnreadableContract_ShownAsWarning(t *testing.T) {
 	out := renderSpecDetail(d, present.NewPalette(false))
 	if !strings.Contains(out, "Warning: testing.md could not be loaded") {
 		t.Fatalf("expected the unreadable Contract warning, got: %s", out)
+	}
+}
+
+func TestRenderSpecDetail_Placeholders_ShownAsWarning(t *testing.T) {
+	d := draftDetail()
+	d.Placeholders = []string{"[Business rule]", "[Primary actor]"}
+	out := renderSpecDetail(d, present.NewPalette(false))
+	if !strings.Contains(out, "Contains 2 template placeholders — run Define before approving.") {
+		t.Fatalf("expected the placeholder warning line, got: %s", out)
+	}
+}
+
+func TestRenderSpecDetail_NoPlaceholders_NoWarningLine(t *testing.T) {
+	out := renderSpecDetail(draftDetail(), present.NewPalette(false))
+	if strings.Contains(out, "template placeholders") {
+		t.Fatalf("did not expect a placeholder warning when there are none, got: %s", out)
 	}
 }
 

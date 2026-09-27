@@ -244,7 +244,7 @@ func TestRunEvaluation_VerificationFail_ReturnsFindingsAlongsideReport(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep, outcome, err := runWorkflowWithAdapterAndOutcome(root, l, wf, workflowPath, targetGeneric, "src/billing/", scripted)
+	rep, outcome, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetGeneric, target: "src/billing/", adapter: scripted})
 	if err == nil {
 		t.Fatalf("expected FAIL to classify as blocked (non-nil error)")
 	}
@@ -270,7 +270,7 @@ func TestRunEvaluation_ReviewPass_NoFindings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep, outcome, err := runWorkflowWithAdapterAndOutcome(root, l, wf, workflowPath, targetGeneric, "src/billing/", scripted)
+	rep, outcome, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetGeneric, target: "src/billing/", adapter: scripted})
 	if err != nil {
 		t.Fatalf("expected PASS to succeed, got %v (report: %+v)", err, rep)
 	}
@@ -311,7 +311,7 @@ func TestObtainWorkflowOutcomeFull_HandoffReachesAdapterContext(t *testing.T) {
 		Summary:  "Refund does not release inventory reservation.",
 		Evidence: "Reservation remains active after refund completion.",
 	}
-	if _, _, _, err := obtainWorkflowOutcomeFull(root, l, wf, workflowPath, targetSpec, "SPEC-001", handoff, scripted); err != nil {
+	if _, _, _, err := obtainOutcome(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetSpec, target: "SPEC-001", handoff: handoff, adapter: scripted}); err != nil {
 		t.Fatal(err)
 	}
 	got := scripted.FakeAdapter.Ctx.Handoff
@@ -346,7 +346,7 @@ func TestObtainWorkflowOutcomeFull_KnowledgeResolutionHandoff_CarriesFindingOnly
 		FindingID: "F-002", Classification: "RISK",
 		Summary: "Retried without idempotency key.",
 	}
-	if _, _, _, err := obtainWorkflowOutcomeFull(root, l, wf, workflowPath, targetGeneric, "", handoff, scripted); err != nil {
+	if _, _, _, err := obtainOutcome(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetGeneric, target: "", handoff: handoff, adapter: scripted}); err != nil {
 		t.Fatal(err)
 	}
 	got := scripted.FakeAdapter.Ctx.Handoff
@@ -365,7 +365,7 @@ func TestObtainWorkflowOutcome_ZeroValueHandoff_NoHandoffOnContext(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := obtainWorkflowOutcome(root, l, wf, workflowPath, targetSpec, "SPEC-001", scripted); err != nil {
+	if _, _, _, err := obtainOutcome(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetSpec, target: "SPEC-001", adapter: scripted}); err != nil {
 		t.Fatal(err)
 	}
 	if scripted.FakeAdapter.Ctx.Handoff != nil {

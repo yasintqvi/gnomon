@@ -121,6 +121,7 @@ Report:
 * Never claim evidence beyond what was actually executed.
 * Do not modify production behavior unless implementation changes are explicitly authorized.
 * Never write or run tests that treat a `Draft` Specification's behavior as authoritative; no authorization permits this exception.
+* Never modify the governing Specification's own content — if it appears wrong or incomplete, report it under `Remaining unresolved` rather than editing it to match what was tested.
 * Exclude only the tests that materially depend on a `MISSING` or `DRAFT` dependency target; continue unaffected testing.
 
 ## Outputs

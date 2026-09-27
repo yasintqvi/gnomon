@@ -11,22 +11,11 @@ import (
 	"gnomon/internal/specs"
 )
 
-// Status performs `gnomon status` — a deterministic, CLI-native, Agent-free snapshot of current
-// project/work state, per cli/COMMAND_SURFACE.md's own enumerated scope: whether the project is
-// initialized; global CONTRACT_VERSION compatibility; the list of Specifications and each one's
-// derived Draft/Approved state; whether the working tree has uncommitted changes; and concise
-// diagnostics when something foundational is broken.
-//
-// Status deliberately does not become validate: it never enumerates workflow frontmatter, never
-// audits Result Contracts, and never performs a structural integrity sweep — cli/COMMAND_SURFACE.md
-// draws that line explicitly ("status answers a question about work, validate answers a question
-// about tooling/installation integrity"). When something foundational is broken (an unsupported
-// or missing CONTRACT_VERSION), Status refuses cleanly and points at `validate` rather than
-// attempting its own structural audit.
-//
-// Status only inspects and reports — it never mutates any authoritative artifact, and it
-// introduces no new persisted state of its own; every fact below is recomputed fresh, exactly as
-// cli/DERIVED_FACTS.md requires.
+// Status performs `gnomon status` — a deterministic snapshot of project/work state: init and
+// CONTRACT_VERSION, each Specification's derived Draft/Approved state, and working-tree changes.
+// Status answers a question about work; validate answers one about tooling/installation integrity
+// (cli/COMMAND_SURFACE.md) — Status never audits Contracts itself, it points at `validate` instead.
+// Every fact is recomputed fresh (cli/DERIVED_FACTS.md); nothing here mutates anything.
 func Status(root string) (*present.Report, error) {
 	l, err := project.Locate(root)
 	if err != nil {
@@ -79,9 +68,7 @@ func Status(root string) (*present.Report, error) {
 	gitStatus, gitErr := gitutil.Inspect(root)
 	switch {
 	case gitErr != nil:
-		// Git is a capability Git-related guidance uses, not a prerequisite for Specification
-		// state — an unexpected Git failure degrades this section, it does not discard the
-		// Specification state already reported above.
+		// A Git failure degrades this section only — it doesn't discard state reported above.
 		rep.Outcome = present.Failed
 		rep.AddSection("Working Tree", fmt.Sprintf("Git state could not be inspected: %s. Specification state above is unaffected.", gitErr))
 		rep.Next = "Investigate the Git error above, then retry."

@@ -9,23 +9,17 @@ import (
 	"gnomon/internal/present"
 )
 
-// AgentChooser interactively asks the Human to choose one of the given Agent providers, returning
-// their choice. Wired to a real terminal prompt only at the CLI edge (cmd/gnomon), exactly like
-// approval.go's PromptFunc for Human-identity fallback — nil means interaction is unavailable,
-// never "prompt silently" or "prompt with no visible output."
+// AgentChooser interactively asks the Human to choose one of the given Agent providers. Wired to a
+// real terminal prompt only at the CLI edge; nil means interaction is unavailable.
 type AgentChooser func(providers []string) (string, error)
 
 // ResolveAgent determines which Agent provider a workflow invocation should use and constructs
-// its Adapter. This is the one function every workflow-invoking command goes through — none of
-// them ever constructs a ClaudeAdapter or CodexAdapter directly; only adapter.Resolve does that.
+// its Adapter — the one function every workflow-invoking command goes through.
 //
-// Precedence: an explicit per-invocation override (the CLI's --agent flag) always wins and is
-// never persisted. Otherwise the persisted user-level default is used, if one exists. If none
-// exists yet and chooser is non-nil (the CLI determined stdin is interactive), the Human is asked
-// once and the choice is persisted as the new default — but only after it validates, so an
-// invalid answer is never written. If none exists and chooser is nil, this refuses rather than
-// guessing: a non-interactive invocation must never silently pick a provider on the Human's
-// behalf.
+// Precedence: an explicit --agent override always wins and is never persisted; otherwise the
+// persisted default is used. If none exists and chooser is non-nil, the Human is asked once and a
+// valid choice is persisted as the new default. If chooser is nil, this refuses rather than
+// silently picking a provider.
 func ResolveAgent(override string, chooser AgentChooser) (adapter.Adapter, error) {
 	if override != "" {
 		return adapter.Resolve(override)
@@ -60,10 +54,8 @@ func ResolveAgent(override string, chooser AgentChooser) (adapter.Adapter, error
 	return ad, nil
 }
 
-// AgentStatus performs `gnomon agent` — reports the current persisted default Agent provider (or
-// its absence) and every available provider. This requires no Gnomon project: Agent provider
-// identity is a Human/installation-level concern, never a project-level one, so it works from any
-// directory.
+// AgentStatus performs `gnomon agent` — reports the persisted default Agent provider (or its
+// absence) and every available provider. Requires no Gnomon project: works from any directory.
 func AgentStatus() (*present.Report, error) {
 	cfg, err := agentconfig.Load()
 	if err != nil {

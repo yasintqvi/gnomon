@@ -9,16 +9,9 @@ import (
 	"gnomon/internal/project"
 )
 
-// Next performs `gnomon next` — cross-session, coarse, repository-derived guidance only, per
-// cli/COMMAND_SURFACE.md. It never claims to remember a specific past Agent result or any notion
-// of workflow progress, because none is ever stored, and it never picks a single "the next
-// action": every existing Specification is listed, each annotated with its own currently valid
-// actions (via SpecActions, the same derivation the Specification workspace uses), in identity
-// order — a complete, honest enumeration, never a selection among candidates.
-//
-// Next never invokes, gates on, or reasons about an Agent: it never accepts --agent, never calls
-// ResolveAgent, and never touches the Result Protocol. It is read-only, exactly like Status and
-// Validate.
+// Next performs `gnomon next` — repository-derived guidance only, per cli/COMMAND_SURFACE.md. It
+// never picks a single "the next action": every Specification is listed with its own currently
+// valid actions (via SpecActions), in identity order. Read-only: never invokes an Agent.
 func Next(root string) (*present.Report, error) {
 	l, err := project.Locate(root)
 	if err != nil {
@@ -96,9 +89,7 @@ func Next(root string) (*present.Report, error) {
 	gitStatus, gitErr := gitutil.Inspect(root)
 	switch {
 	case gitErr != nil:
-		// Git is a capability Git-related guidance uses, not a prerequisite for Specification
-		// guidance — an unexpected Git failure degrades this section, it does not discard the
-		// Specification guidance already computed above.
+		// A Git failure degrades this section only — it doesn't discard guidance computed above.
 		rep.Outcome = present.Failed
 		rep.AddSection("Working Tree", fmt.Sprintf("Git state could not be inspected: %s. Specification guidance above is unaffected.", gitErr))
 		rep.Next = "Investigate the Git error above, then retry."

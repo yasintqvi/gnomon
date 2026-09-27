@@ -121,6 +121,7 @@ Remaining unresolved (BLOCKED only):
 - Require explicit authorization for destructive operations.
 - Do not weaken verification to obtain a passing result.
 - Never implement behavior governed by a `Draft` Specification; no authorization or urgency permits this exception.
+- Never modify the governing Specification's own content — if it appears wrong or incomplete, report it under `Remaining unresolved` rather than editing it to match what was built.
 - Stop only the portion of work that materially depends on a `MISSING` or `DRAFT` dependency target; continue unaffected work.
 
 ## Failure Handling

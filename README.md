@@ -204,7 +204,7 @@ SPEC-001 — Mark a task complete
 
 Choose **Implement** and the agent works against the approved Specification while following the knowledge and conventions already established for the project.
 
-Approval doesn't automatically start implementation, and defining a Specification doesn't automatically approve it. Each transition remains an explicit choice.
+Approval doesn't automatically start implementation, and defining a Specification doesn't automatically approve it. Each transition remains an explicit choice. Approving a Specification that still reads like the untouched template warns you and, in an interactive terminal, asks you to confirm before proceeding — it's still your call either way.
 
 ### 4. Keep working from the Specification
 

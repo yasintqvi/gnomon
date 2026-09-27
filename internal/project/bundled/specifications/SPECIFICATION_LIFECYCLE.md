@@ -32,8 +32,8 @@ This document does not cover:
 
 A Specification has exactly two lifecycle states:
 
-- **Draft** — the Specification's current approval-relevant content has no valid, matching human approval.
-- **Approved** — the Specification's current approval-relevant content exactly matches valid, non-revoked approval evidence.
+- **Draft** — the Specification's current approval-relevant content does not match the most recent human approval decision, or that decision has been revoked.
+- **Approved** — the Specification's current approval-relevant content exactly matches the most recent human approval decision, and that decision has not been revoked.
 
 A newly created Specification starts as Draft.
 
@@ -87,11 +87,14 @@ How evidence is captured, computed, or stored — hashing, snapshotting, a state
 
 ## Derived State Rules
 
-- If a Specification's current approval-relevant content does not match any valid, non-revoked approval evidence, its effective lifecycle state is **Draft**.
-- If a Specification's current approval-relevant content exactly matches valid, non-revoked approval evidence, its effective lifecycle state is **Approved**.
-- Editing approval-relevant content away from previously approved content makes the Specification Draft. This is deterministic and never depends on a judgment call about whether a change was "important enough."
-- If content is later restored to exactly what previously valid, non-revoked approval evidence describes, the Specification is Approved again under that evidence — no new human action is required, because the human already reviewed and approved that exact content.
-- Human revocation invalidates a specific approval evidence record's applicability going forward. It does not delete or alter that record's historical existence, and it does not itself change Specification content. A revoked approval can never make a Specification Approved again — even if content later matches the revoked record exactly — until a new, valid approval is granted.
+**The latest approval decision counts.** Among every approval grant ever recorded for a Specification, only the most recent one — by when it was granted, never by which content it happens to match — can currently make the Specification Approved. Older grants remain part of the historical record but can never, by themselves, cause an Approved state again.
+
+- The effective lifecycle state is **Approved** if and only if the most recent grant has not been revoked, and current approval-relevant content exactly matches the content it was granted for.
+- Otherwise, the effective lifecycle state is **Draft** — including when the most recent grant simply no longer matches current content, and including when it has been revoked, however many older grants might still happen to match.
+- Editing approval-relevant content away from the most recent grant's content makes the Specification Draft. This is deterministic and never depends on a judgment call about whether a change was "important enough."
+- If content is later restored to exactly what the most recent grant describes, the Specification is Approved again under that same grant — no new human action is required. For example: content is approved (v1), approved again after a change (v2), then reverted to exactly v1 — the Specification is Draft, because the human's last decision was v2, not v1; a fresh approval of v1 is required to make it Approved again.
+- Human revocation invalidates a specific grant's applicability going forward. It does not delete or alter that grant's historical existence, and it does not itself change Specification content. Revoking the most recent grant makes the Specification Draft even if an older, still-unrevoked grant happens to match current content exactly — that older grant never becomes active again. For example: content is approved (v1), approved again (v2), the v2 grant is revoked, then content is reverted to exactly v1 — the Specification remains Draft; v1's own earlier grant is not resurrected.
+- After merging branches that each approved different content, the more recent grant by time wins regardless of which branch it came from, so the Specification may need to be approved again even if its final content matches one of the merged branches' own already-approved version.
 
 ---
 

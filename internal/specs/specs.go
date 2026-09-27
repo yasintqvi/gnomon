@@ -45,11 +45,8 @@ func NextIdentity(specsDir string) (Identity, error) {
 	return Identity(fmt.Sprintf("SPEC-%03d", max+1)), nil
 }
 
-// List returns every currently existing Specification identity, sorted by identity — the same
-// filesystem-derived existence fact NextIdentity and Exists already use, just enumerated rather
-// than probed for one identity or computed as a maximum. SPEC-000 (the template) is never
-// included, matching NextIdentity's own permanent reservation of it. This is purely a listing:
-// callers must not read any priority or "current Specification" meaning into the resulting order.
+// List returns every currently existing Specification identity, sorted by identity. SPEC-000 (the
+// template) is never included. Purely a listing — callers must not read priority into the order.
 func List(specsDir string) ([]Identity, error) {
 	entries, err := os.ReadDir(specsDir)
 	if err != nil {
@@ -110,12 +107,10 @@ func ReadContent(specsDir string, id Identity) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-// Slugify mechanically normalizes s into a lowercase, hyphen-separated, filename-safe form —
-// the CLI's entire responsibility for filename construction (see CreateDraft): lowercase,
-// non-alphanumeric runs collapsed to a single hyphen, no leading/trailing hyphen. It performs no
-// semantic transformation (no stop-word removal, no NLP) — callers needing a semantically
-// meaningful slug must supply their own already-concise input (see workflows/specification-
-// discovery.md's candidate_identity field for the Discovery-driven case).
+// Slugify mechanically normalizes s into a lowercase, hyphen-separated, filename-safe form:
+// non-alphanumeric runs collapse to a single hyphen, no leading/trailing hyphen. No semantic
+// transformation (no stop-word removal, no NLP) — callers needing a meaningful slug supply
+// their own already-concise input.
 func Slugify(s string) string {
 	var b strings.Builder
 	lastHyphen := true // suppress a leading hyphen
@@ -134,13 +129,9 @@ func Slugify(s string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-// CreateDraft copies the Specification template, substituting only the identity and the given
-// display title — never generating any behavioral content — and writes the new Draft
-// Specification file under a name built from slug. slug is the caller's responsibility to
-// supply already-normalized (Slugify, applied to whatever the caller judges an appropriate
-// source — the title itself for a direct Human-supplied title, or a Discovery candidate's own
-// separate semantic identity field): CreateDraft performs no semantic judgment about what the
-// slug should contain, only mechanical file construction from what it is given.
+// CreateDraft copies the Specification template, substituting only the identity and display
+// title — never generating behavioral content — under a name built from slug. slug must already
+// be normalized (Slugify) by the caller; CreateDraft performs no semantic judgment of its own.
 func CreateDraft(specsDir string, id Identity, title, slug string) (string, error) {
 	if slug == "" {
 		return "", fmt.Errorf("a non-empty slug is required")
@@ -170,11 +161,9 @@ func CreateDraft(specsDir string, id Identity, title, slug string) (string, erro
 
 var titleHeadingPattern = regexp.MustCompile(`^#\s*SPEC-\S+\s*[—–-]\s*(.+?)\s*$`)
 
-// Title mechanically extracts the display title from a Specification's own first-line heading
-// (the template's own "# SPEC-[ID] — [Use Case Name]" convention) — plain text extraction, never
-// a semantic judgment about the content. Falls back to the identity itself when the heading is
-// absent or doesn't match the convention, so a malformed or unconventional file still displays
-// something rather than an empty string.
+// Title mechanically extracts the display title from a Specification's first-line heading
+// (template convention: "# SPEC-[ID] — [Use Case Name]"). Falls back to the identity itself when
+// the heading is absent or malformed.
 func Title(id Identity, content []byte) string {
 	for _, line := range strings.Split(string(content), "\n") {
 		if m := titleHeadingPattern.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
@@ -185,4 +174,69 @@ func Title(id Identity, content []byte) string {
 		}
 	}
 	return string(id)
+}
+
+// substitutedTemplateTokens are the literal tokens CreateDraft itself replaces when creating a
+// Specification — copied from CreateDraft's own replacements, not guessed. CreateDraft is left
+// unchanged; this list must be kept in sync with it by hand if that ever changes.
+var substitutedTemplateTokens = map[string]bool{
+	"[ID]":            true,
+	"[Use Case Name]": true,
+	"[Use case name]": true,
+}
+
+// bracketToken matches one single-line, non-nested "[...]" span — a candidate template
+// placeholder token.
+var bracketToken = regexp.MustCompile(`\[[^\[\]]+\]`)
+
+// RemainingPlaceholders returns every placeholder token from template that still appears verbatim
+// in spec, in order of first appearance — the signal that a Specification still reads like the
+// untouched template. A token CreateDraft itself substitutes is never included; a bracketed span
+// the Human wrote themselves, absent from the template, is never reported either.
+func RemainingPlaceholders(template, spec []byte) []string {
+	specText := string(spec)
+	var remaining []string
+	for _, tok := range templatePlaceholderTokens(template) {
+		if strings.Contains(specText, tok) {
+			remaining = append(remaining, tok)
+		}
+	}
+	return remaining
+}
+
+// templatePlaceholderTokens extracts every distinct "[...]" placeholder candidate from template,
+// in order of first appearance, excluding: the text part of a markdown link or image (immediately
+// followed by "("), a span inside inline code (an odd number of backticks precede it on the same
+// line), a span inside a fenced code block, and any token CreateDraft itself substitutes.
+func templatePlaceholderTokens(template []byte) []string {
+	var tokens []string
+	seen := map[string]bool{}
+	inFence := false
+
+	for _, line := range strings.Split(string(template), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		for _, loc := range bracketToken.FindAllStringIndex(line, -1) {
+			start, end := loc[0], loc[1]
+			if end < len(line) && line[end] == '(' {
+				continue // markdown link/image text, e.g. "[label](url)"
+			}
+			if strings.Count(line[:start], "`")%2 == 1 {
+				continue // inside an inline code span
+			}
+			tok := line[start:end]
+			if substitutedTemplateTokens[tok] || seen[tok] {
+				continue
+			}
+			seen[tok] = true
+			tokens = append(tokens, tok)
+		}
+	}
+	return tokens
 }

@@ -7,12 +7,16 @@ import (
 
 func TestPrepare_InvokesFullyInteractiveMode(t *testing.T) {
 	a := &ClaudeAdapter{&processAdapter{executable: "claude"}}
-	if err := a.Prepare(Context{WorkflowIdentity: "implementation", ResultPath: "/tmp/x", RunID: "r"}); err != nil {
+	root := t.TempDir()
+	if err := a.Prepare(Context{ProjectRoot: root, WorkflowIdentity: "implementation", ResultPath: "/tmp/x", RunID: "r"}); err != nil {
 		t.Fatal(err)
 	}
 	args := a.cmd.Args
 	if len(args) != 2 {
-		t.Fatalf("expected exactly [executable, prompt] with no mode flags, got: %v", args)
+		t.Fatalf("expected exactly [executable, instruction] with no mode flags, got: %v", args)
+	}
+	if !strings.HasPrefix(args[1], "Read and follow the instructions in ") {
+		t.Fatalf("expected a short instruction pointing at the prompt file, got: %v", args)
 	}
 	if a.cmd.Stdin == nil {
 		t.Fatalf("expected stdin to be inherited for a fully interactive session")

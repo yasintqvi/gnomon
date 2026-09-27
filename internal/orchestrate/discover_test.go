@@ -29,7 +29,7 @@ func TestDiscoverCandidate_CandidateProposed_ExtractsFields(t *testing.T) {
 			"non_blocking_caveat": "scope may narrow later",
 		},
 	}
-	outcome, detail, failureRep, err := obtainWorkflowOutcome(root, l, wf, workflowPath, targetNone, "", scripted)
+	outcome, detail, failureRep, err := obtainOutcome(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetNone, adapter: scripted})
 	if failureRep != nil || err != nil {
 		t.Fatalf("unexpected failure: %v (%+v)", err, failureRep)
 	}
@@ -67,7 +67,7 @@ func TestDiscoverCandidate_MissingIdentity_RefusedAsProtocolFailure(t *testing.T
 			"rationale": "not yet represented",
 		},
 	}
-	outcome, _, failureRep, err := obtainWorkflowOutcome(root, l, wf, workflowPath, targetNone, "", scripted)
+	outcome, _, failureRep, err := obtainOutcome(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetNone, adapter: scripted})
 	if failureRep != nil || err != nil {
 		t.Fatalf("unexpected failure obtaining outcome: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestDiscoverCandidate_NoCandidateIdentified_RendersOrdinaryReport(t *testin
 		FakeAdapter: &adapter.FakeAdapter{},
 		Payload:     map[string]interface{}{"outcome": "NO_CANDIDATE_IDENTIFIED"},
 	}
-	outcome, detail, failureRep, err := obtainWorkflowOutcome(root, l, wf, workflowPath, targetNone, "", scripted)
+	outcome, detail, failureRep, err := obtainOutcome(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetNone, adapter: scripted})
 	if failureRep != nil || err != nil {
 		t.Fatalf("unexpected failure: %v", err)
 	}

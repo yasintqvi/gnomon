@@ -15,21 +15,14 @@ type selectItem struct {
 }
 
 // moveSelection computes the next selected index for a delta of -1 (up) or +1 (down) over count
-// items, wrapping at both ends. Pulled out of runSelectMenu as its own pure function specifically
-// so this one piece of real logic is testable without a terminal.
+// items, wrapping at both ends.
 func moveSelection(current, delta, count int) int {
 	return ((current+delta)%count + count) % count
 }
 
 // runSelectMenu renders a minimal arrow-key selection menu to stderr (keeping stdout clean) and
-// returns the chosen item's value once the Human presses Enter. It requires stdin to be a real
-// terminal — callers must only invoke this once interactivity has already been confirmed
-// (agentChooserForInvocation does this before ever wiring a chooser in).
-//
-// This is a small, self-contained widget built directly on golang.org/x/term's raw-mode support
-// and plain ANSI cursor-movement codes — not a general terminal UI framework — because arrow-key
-// navigation genuinely requires reading individual keystrokes before Enter, which only raw mode
-// provides; nothing else about the CLI's presentation changes as a result of adding it.
+// returns the chosen item's value once the Human presses Enter. Requires stdin to be a real
+// terminal — callers must confirm interactivity first (agentChooserForInvocation does).
 func runSelectMenu(title string, items []selectItem) (string, error) {
 	if len(items) == 0 {
 		return "", fmt.Errorf("no choices available")
@@ -98,30 +91,23 @@ func runSelectMenu(title string, items []selectItem) (string, error) {
 }
 
 // filterItem is one row in a filterable menu: value returned on selection, label displayed, and
-// searchText matched against the typed filter (lowercased once up front) — kept distinct from
-// label so a row can be found by more than just what's visually shown (e.g. matching a
-// Specification's identity even though the label leads with its title).
+// searchText matched against the typed filter — distinct from label so a row can be found by more
+// than what's visually shown (e.g. a Specification's identity even though the label leads with title).
 type filterItem struct {
 	value      string
 	label      string
 	searchText string
 }
 
-// errMenuCancelled is returned by runFilterableMenu (and may be returned by callers of
-// runSelectMenu) when the Human explicitly backs out — Esc or Ctrl+C/Ctrl+D — as opposed to a
+// errMenuCancelled means the Human explicitly backed out (Esc or Ctrl+C/Ctrl+D), as opposed to a
 // real error. Callers distinguish the two with errors.Is.
 var errMenuCancelled = fmt.Errorf("cancelled")
 
 // runFilterableMenu renders a scrollable, type-to-filter menu to stderr and returns the selected
-// item's value, errMenuCancelled if the Human backed out, or a real error. extraActions, when
-// non-empty, are always shown first, unaffected by the filter (used for "+ Create new
-// Specification" / "+ Discover next Specification" style entries that should stay reachable
-// regardless of what's typed).
-//
-// The visible window is a fixed maxVisible rows regardless of how many items currently match, so
-// every redraw clears and repaints exactly the same number of terminal lines — the same fixed-
-// height redraw strategy runSelectMenu already uses, just with the row content varying instead of
-// the row count.
+// item's value, errMenuCancelled if the Human backed out, or a real error. extraActions are always
+// shown first, unaffected by the filter (e.g. "+ Create new Specification"). The visible window is
+// a fixed maxVisible rows regardless of how many items match, so every redraw repaints the same
+// number of terminal lines.
 func runFilterableMenu(title string, extraActions, items []filterItem, maxVisible int) (string, error) {
 	fd := int(os.Stdin.Fd())
 	oldState, err := term.MakeRaw(fd)

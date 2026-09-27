@@ -19,10 +19,8 @@ func archiveExt(goos string) string {
 	return ".tar.gz"
 }
 
-// executableName returns the filename Gnomon's own executable has inside a release archive for
-// goos — confirmed by inspecting a real published archive's contents, not assumed: GoReleaser
-// names the built binary "gnomon" (builds.binary in .goreleaser.yaml) and appends ".exe" for
-// windows automatically.
+// executableName returns the filename Gnomon's executable has inside a release archive for goos —
+// confirmed against a real published archive, not assumed.
 func executableName(goos string) string {
 	if goos == "windows" {
 		return "gnomon.exe"
@@ -30,13 +28,9 @@ func executableName(goos string) string {
 	return "gnomon"
 }
 
-// selectAsset finds the one release Asset matching goos/goarch, from GoReleaser's own
-// archives.name_template: "{{.ProjectName}}_{{.Version}}_{{.Os}}_{{.Arch}}" — i.e.
-// "gnomon_<version>_<goos>_<goarch>.<ext>", where .Os/.Arch are Go's own runtime.GOOS/GOARCH
-// values verbatim (goreleaser applies no name mangling here), also confirmed against real
-// published asset names. Matching by suffix (rather than reconstructing the full name, which
-// would require knowing the release's de-"v"-prefixed version string) keeps this independent of
-// exactly how the version segment is spelled.
+// selectAsset finds the release Asset matching goos/goarch: "gnomon_<version>_<goos>_<goarch>.<ext>"
+// (confirmed against real published asset names). Matched by suffix rather than reconstructing the
+// full name, so this stays independent of exactly how the version segment is spelled.
 func selectAsset(assets []Asset, goos, goarch string) (Asset, error) {
 	suffix := fmt.Sprintf("_%s_%s%s", goos, goarch, archiveExt(goos))
 	for _, a := range assets {

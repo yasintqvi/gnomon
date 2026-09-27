@@ -1,10 +1,13 @@
 package selfupdate
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"gnomon/internal/testutil"
 )
 
 func TestReplaceExecutable_Success_ReplacesContentAndPreservesMode(t *testing.T) {
@@ -48,12 +51,7 @@ func TestReplaceExecutable_Success_ReplacesContentAndPreservesMode(t *testing.T)
 // requirement 14/15: when the target's directory cannot be written to (a permissions problem,
 // never elevated automatically), the existing executable is left exactly as it was.
 func TestReplaceExecutable_UnwritableDirectory_LeavesOriginalIntact(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("directory write-permission semantics differ on windows; covered on unix runners")
-	}
-	if os.Geteuid() == 0 {
-		t.Skip("running as root bypasses permission checks")
-	}
+	testutil.SkipIfPermissionsNotEnforced(t)
 
 	dir := t.TempDir()
 	target := filepath.Join(dir, "gnomon")
@@ -76,6 +74,42 @@ func TestReplaceExecutable_UnwritableDirectory_LeavesOriginalIntact(t *testing.T
 	}
 	if string(got) != "old binary" {
 		t.Fatalf("expected the original executable untouched, got %q", got)
+	}
+}
+
+// TestReplaceExecutable_CommitRenameFails_LeavesOriginalIntactAndNoTempFile is
+// TestReplaceExecutable_UnwritableDirectory_LeavesOriginalIntact's permission-independent
+// counterpart: it injects the failure directly instead of relying on a real unwritable directory,
+// so it runs — and verifies the same guarantee — on every platform and user, root included.
+func TestReplaceExecutable_CommitRenameFails_LeavesOriginalIntactAndNoTempFile(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "gnomon")
+	if err := os.WriteFile(target, []byte("old binary"), 0o755); err != nil {
+		t.Fatalf("seeding target: %v", err)
+	}
+
+	origRename := commitRename
+	commitRename = func(oldpath, newpath string) error { return fmt.Errorf("simulated rename failure") }
+	t.Cleanup(func() { commitRename = origRename })
+
+	if err := replaceExecutable(target, []byte("new binary")); err == nil {
+		t.Fatal("expected replaceExecutable to fail when the commit rename fails")
+	}
+
+	got, readErr := os.ReadFile(target)
+	if readErr != nil {
+		t.Fatalf("reading target after failed update: %v", readErr)
+	}
+	if string(got) != "old binary" {
+		t.Fatalf("expected the original executable untouched, got %q", got)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "gnomon" {
+		t.Fatalf("expected no leftover temp file, got: %+v", entries)
 	}
 }
 

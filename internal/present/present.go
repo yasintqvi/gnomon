@@ -11,14 +11,12 @@ type Outcome int
 const (
 	// Success — the operation completed as intended.
 	Success Outcome = iota
-	// Blocked — a workflow, or a deterministic gate, correctly reports more is needed before
-	// this can proceed. Never a system failure.
+	// Blocked — more is needed before this can proceed. Never a system failure.
 	Blocked
-	// Cancelled — the Human (or Gnomon, on their behalf) ended the run intentionally before
-	// completion.
+	// Cancelled — the Human (or Gnomon, on their behalf) ended the run intentionally.
 	Cancelled
-	// Failed — something did not work as intended: a process crash, a missing/invalid result,
-	// or any other genuine error.
+	// Failed — something did not work as intended: a crash, a missing/invalid result, or any
+	// other genuine error.
 	Failed
 )
 
@@ -35,15 +33,10 @@ func (o Outcome) symbol() string {
 	}
 }
 
-// ansi is the one place this package's restrained semantic color vocabulary is defined: green
-// for success, yellow for a Blocked/Cancelled outcome (or anything else that needs attention
-// without being a failure), red for an actual failure or unclassified error, cyan for
-// headings/structure/next-action text, bold for compact machine-oriented values (commands,
-// identifiers, paths — never full syntax highlighting, just one consistent emphasis), dim for
-// secondary/contextual text that should visually recede rather than compete with the content
-// around it. Applying color is purely a rendering-time decision (RenderWithOptions/
-// RenderErrorColor/Palette, all gated on a caller-supplied bool) — it never changes Outcome,
-// Summary, Section, or any other field a caller reads.
+// ansi is this package's restrained semantic color vocabulary: green success, yellow
+// needs-attention, red failure, cyan headings, bold for compact values, dim for secondary text.
+// Applying color is purely a rendering-time decision, gated on a caller-supplied bool — it never
+// changes Outcome, Summary, Section, or any other field a caller reads.
 const (
 	ansiReset  = "\033[0m"
 	ansiBold   = "\033[1m"
@@ -74,17 +67,14 @@ func colorize(color, s string) string {
 	return color + s + ansiReset
 }
 
-// Palette is this package's small, closed semantic color vocabulary, exposed for the rare caller
-// that builds its own Human-facing text outside a Report (the interactive Specification
-// workspace) — so every surface draws from exactly one restrained vocabulary, decided once at the
-// CLI edge, rather than each scattering its own ANSI escape codes. Every method is a no-op when
-// the Palette was constructed with color disabled, and always returns s unstyled when s is empty.
+// Palette exposes this package's semantic color vocabulary for the rare caller that builds its own
+// Human-facing text outside a Report (the interactive Specification workspace). Every method is a
+// no-op when constructed with color disabled.
 type Palette struct {
 	color bool
 }
 
-// NewPalette returns a Palette that applies color only when color is true — the same bool every
-// other Color-gated entry point in this package already takes.
+// NewPalette returns a Palette that applies color only when color is true.
 func NewPalette(color bool) Palette {
 	return Palette{color: color}
 }
@@ -104,10 +94,8 @@ func (p Palette) Warn(s string) string { return p.wrap(ansiYellow, s) }
 // Bad styles an actual failure — the same red Failed itself uses.
 func (p Palette) Bad(s string) string { return p.wrap(ansiRed, s) }
 
-// Code styles a compact, machine-oriented value — a command, an identifier, a path — with a
-// single consistent emphasis (bold, not a color), so it reads as "a value to copy or type"
-// without competing with this package's semantic-outcome colors. Never syntax highlighting: every
-// such value gets the same treatment regardless of what kind of value it is.
+// Code styles a compact, machine-oriented value (a command, identifier, or path) bold — never
+// syntax highlighting, every value gets the same treatment.
 func (p Palette) Code(s string) string { return p.wrap(ansiBold, s) }
 
 // Muted styles secondary or contextual text — metadata, an unavailable action's reason — so it
@@ -121,12 +109,9 @@ func (p Palette) wrap(color, s string) string {
 	return colorize(color, s)
 }
 
-// styleCodeSpans bolds every `backtick-delimited` span in s and leaves everything else, including
-// the backticks themselves, untouched — reusing the Markdown-style inline-code convention already
-// used throughout Gnomon's own guidance text (and naturally present in any Agent narrative that
-// happens to use it) as the one deliberate, unambiguous marker for "this is a command, path, or
-// identifier", rather than inspecting content or attempting real syntax highlighting. A no-op
-// when color is "".
+// styleCodeSpans bolds every `backtick-delimited` span in s, leaving the backticks and everything
+// else untouched — reusing Markdown's inline-code convention as the marker for "this is a command,
+// path, or identifier". A no-op when color is "".
 func styleCodeSpans(s, color string) string {
 	if color == "" || !strings.Contains(s, "`") {
 		return s
@@ -153,10 +138,8 @@ func styleCodeSpans(s, color string) string {
 	return b.String()
 }
 
-// Section is one labeled, omittable block of content (for example "Delivered" or "Unresolved").
-// A Section with an empty Body is skipped entirely by Render — callers should supply a natural
-// equivalent (e.g. "No unresolved issues.") only where that is itself meaningful, never a
-// placeholder for its own sake.
+// Section is one labeled, omittable block of content (e.g. "Delivered" or "Unresolved"). A Section
+// with an empty Body is skipped entirely by Render.
 type Section struct {
 	Label string
 	Body  string
@@ -182,35 +165,26 @@ func (r *Report) AddSection(label, body string) {
 }
 
 // RenderOptions controls how RenderWithOptions presents a Report. Both fields default to their
-// zero value ("plain, non-verbose") so a caller that only needs one behaves exactly as Render
-// itself already did.
+// zero value ("plain, non-verbose").
 type RenderOptions struct {
-	// Verbose includes low-level diagnostics (exit codes, run IDs, paths) — the same switch
-	// Render's own verbose parameter has always been.
+	// Verbose includes low-level diagnostics (exit codes, run IDs, paths).
 	Verbose bool
-	// Color applies this package's small semantic ANSI vocabulary. It is purely presentational:
-	// Outcome/Summary/Section/Next content is byte-identical whether or not this is set: only
-	// which escape codes surround it changes. Callers decide this at the CLI edge (a real,
-	// interactive TTY, with NO_COLOR unset) — present itself never inspects the environment.
+	// Color applies this package's semantic ANSI vocabulary — purely presentational, content is
+	// byte-identical either way. Callers decide this at the CLI edge; present never inspects the
+	// environment itself.
 	Color bool
 }
 
-// Render produces the CLI's plain-text presentation of r — no color, ever. Every existing caller
-// (including every test asserting on exact rendered text) keeps this exact, deterministic,
-// ANSI-free behavior; it is a thin wrapper over RenderWithOptions with Color left false.
+// Render produces the CLI's plain-text presentation of r — no color, ever. A thin wrapper over
+// RenderWithOptions with Color left false.
 func Render(r *Report, verbose bool) string {
 	return RenderWithOptions(r, RenderOptions{Verbose: verbose})
 }
 
-// RenderWithOptions produces the CLI's presentation of r, applying opts.Color's restrained
-// semantic vocabulary when set: the outcome symbol/summary bold in the outcome's own color (green
-// success, yellow blocked/cancelled, red failed) as the report's one title line; section labels
-// and the next-action arrow bold cyan as headings, visually distinct from the plain body text
-// beneath them; and, within body/Next/Detail text, any `backtick-delimited` command, path, or
-// identifier bolded in place — the one restrained device this package uses for "compact
-// machine-oriented value", reusing Gnomon's own existing inline-code convention rather than
-// attempting real syntax highlighting. Structure and content are identical to Render at
-// Color: false — color never changes what a line says, only how it is emphasized.
+// RenderWithOptions produces the CLI's presentation of r, applying opts.Color's semantic
+// vocabulary when set: the outcome line in its own color, section labels and the next-action arrow
+// as cyan headings, and any `backtick-delimited` value bolded in place. Structure and content are
+// identical to Render at Color: false — color never changes what a line says.
 func RenderWithOptions(r *Report, opts RenderOptions) string {
 	var b strings.Builder
 
@@ -272,16 +246,13 @@ func RenderWithOptions(r *Report, opts RenderOptions) string {
 	return b.String()
 }
 
-// RenderError is the fallback presentation for a genuine, unclassified error with no Report —
-// kept in the same small visual vocabulary rather than a raw Go error line. Always plain, exactly
-// like Render; see RenderErrorColor for the color-aware equivalent.
+// RenderError is the fallback presentation for a genuine error with no Report. Always plain; see
+// RenderErrorColor for the color-aware equivalent.
 func RenderError(err error) string {
 	return "✗ " + err.Error() + "\n"
 }
 
-// RenderErrorColor is RenderError's content, additionally colored red when color is true — the
-// one other place this package's vocabulary applies, since a Cobra-level error (an unknown
-// command, a rejected flag) never produces a Report at all.
+// RenderErrorColor is RenderError's content, additionally colored red when color is true.
 func RenderErrorColor(err error, color bool) string {
 	if !color {
 		return RenderError(err)

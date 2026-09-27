@@ -27,27 +27,18 @@ const (
 // payload schema a workflow declares.
 type ResultContract struct {
 	TerminalPath string `yaml:"terminal_path"`
-	// Classification maps every value the terminal_path property's schema enum permits to
-	// "success" or "blocked" — CLI/runtime handling of a valid, already-classified terminal
-	// result. It never reinterprets the workflow's own conclusion (a Verification "FAIL" is a
-	// successfully completed run reporting a negative conclusion, not a process/Agent failure)
-	// and it is exhaustive by construction: Validate() rejects any Contract where a permitted
-	// terminal value has no entry here, or where an entry references a value the schema does not
-	// permit, or where a value classifies as anything other than "success"/"blocked". "failed" is
-	// deliberately never a classification value — that outcome is reserved for actual CLI/
-	// process/protocol failure, computed entirely outside this map.
+	// Classification maps every value the terminal_path enum permits to "success" or "blocked" —
+	// never reinterpreting the workflow's own conclusion (a Verification "FAIL" is a successful
+	// run reporting a negative conclusion, not a failure). Exhaustive by construction: Validate()
+	// rejects any gap or mismatch against the schema. "failed" is never a value here — that
+	// outcome is computed entirely outside this map.
 	Classification map[string]string      `yaml:"classification"`
 	Schema         map[string]interface{} `yaml:"schema"`
 
-	// PropertyOrder maps a dotted path prefix — "" for the schema's own top level, or a nested
-	// object property's own dotted path (e.g. "summary") — to that level's declared
-	// result.schema.properties key order. Information a plain map[string]interface{} decode
-	// necessarily discards, and the one piece of Contract structure generic rendering needs to
-	// present a payload's fields in the order their own author declared them, at whatever nesting
-	// depth a Result Contract's own terminal_path happens to pass through — never a hardcoded
-	// field name. Only object properties are recorded this way; array `items` have no single
-	// declared order a rendered list of them could follow, so rendering falls back to alphabetical
-	// there, unaffected by this map.
+	// PropertyOrder maps a dotted path prefix ("" for the top level, "summary" one level down, ...)
+	// to that level's declared result.schema.properties key order — a plain map decode discards
+	// this, but generic rendering needs it to present fields in the author's own declared order.
+	// Only object properties are recorded; array `items` fall back to alphabetical.
 	PropertyOrder map[string][]string `yaml:"-"`
 }
 
@@ -87,10 +78,8 @@ func Load(path string) (Workflow, error) {
 }
 
 // schemaPropertyOrder walks the raw frontmatter a second time, via yaml.Node, purely to capture
-// the declared order of result.schema.properties at every nesting level — order a plain-map
-// yaml.Unmarshal necessarily discards. fm is already known-valid YAML at the point this is
-// called (the first Unmarshal into Workflow above already succeeded against the same bytes), so
-// failure here is not expected in practice, but is still reported rather than silently swallowed.
+// the declared order of result.schema.properties at every nesting level — order the plain-map
+// Unmarshal above already discarded.
 func schemaPropertyOrder(fm []byte) (map[string][]string, error) {
 	var root yaml.Node
 	if err := yaml.Unmarshal(fm, &root); err != nil {
@@ -106,13 +95,9 @@ func schemaPropertyOrder(fm []byte) (map[string][]string, error) {
 }
 
 // collectPropertyOrder recursively walks a JSON-Schema-shaped YAML node, recording each object
-// node's own declared properties order under its dotted path prefix (joined with "." — the same
-// convention TerminalPath and TerminalValue already use). It descends only into nested object
-// properties (schema.properties.X.properties...), never into array `items` — an array-typed
-// property node has no "properties" key of its own (it has "items" instead), so the mere absence
-// of one naturally halts descent there without needing to special-case "type: array" explicitly.
-// This is what lets generic rendering follow a terminal_path of arbitrary depth through arbitrary
-// future/custom Result Contracts, not only the one level "summary.aggregate" happens to need.
+// node's declared properties order under its dotted path prefix. Descends only into nested object
+// properties, never array `items` (which have no "properties" key, so descent halts there
+// naturally without special-casing "type: array").
 func collectPropertyOrder(schemaNode *yaml.Node, prefix string, order map[string][]string) {
 	properties := mappingValue(schemaNode, "properties")
 	if properties == nil || properties.Kind != yaml.MappingNode {
@@ -193,11 +178,8 @@ func (w Workflow) Validate() error {
 	return nil
 }
 
-// terminalEnum returns the declared enum values for the terminal_path property — every terminal
-// value classification must exhaustively cover, read directly from the schema rather than
-// duplicated anywhere else, so the two can never drift apart. terminal_path is a dotted path
-// (schemaNodeAt walks it generically, at whatever nesting depth it declares), matching the same
-// convention TerminalValue already uses to extract the runtime payload value.
+// terminalEnum returns the declared enum values for the terminal_path property, read directly
+// from the schema (never duplicated elsewhere) so it and Classification can never drift apart.
 func (rc ResultContract) terminalEnum() ([]string, error) {
 	node, err := rc.schemaNodeAt(rc.TerminalPath)
 	if err != nil {
@@ -219,8 +201,7 @@ func (rc ResultContract) terminalEnum() ([]string, error) {
 }
 
 // schemaNodeAt walks rc.Schema's properties tree along a dotted path, returning the JSON-Schema
-// node describing that property — generic over any nesting depth a Result Contract's schema
-// actually declares, never assuming a flat, single-segment terminal_path.
+// node describing that property — generic over any nesting depth, never a flat single segment.
 func (rc ResultContract) schemaNodeAt(dottedPath string) (map[string]interface{}, error) {
 	segments := strings.Split(dottedPath, ".")
 	current, ok := rc.Schema["properties"].(map[string]interface{})
@@ -245,11 +226,8 @@ func (rc ResultContract) schemaNodeAt(dottedPath string) (map[string]interface{}
 }
 
 // validateClassification enforces exhaustive, consistent terminal classification: every enum
-// value the schema permits must have exactly one classification entry, every classification
-// entry must reference an actual enum value, and every classification value must be one of the
-// two the CLI's presentation layer understands ("failed" is never a classification value — that
-// outcome is reserved for actual process/protocol failure). Nothing is ever guessed at runtime —
-// a missing, unknown, inconsistent, or incomplete declaration is rejected here, at load time, not
+// value must have exactly one classification entry, every entry must reference an actual enum
+// value, and every value must be "success" or "blocked". Rejected here at load time, never
 // discovered later against a real Agent result.
 func (rc ResultContract) validateClassification(enumValues []string) error {
 	if len(rc.Classification) == 0 {
@@ -278,10 +256,9 @@ func (rc ResultContract) validateClassification(enumValues []string) error {
 	return nil
 }
 
-// ClassificationFor returns the declared classification ("success" or "blocked") for a terminal
-// value already confirmed valid against the schema's enum. It performs no additional validation
-// itself — Validate() has already guaranteed, at load time, that every schema-permitted value has
-// exactly one of these two classifications.
+// ClassificationFor returns the declared classification for a terminal value already confirmed
+// valid against the schema's enum. Performs no validation itself — Validate() already guaranteed
+// this at load time.
 func (rc ResultContract) ClassificationFor(terminalValue string) (string, bool) {
 	c, ok := rc.Classification[terminalValue]
 	return c, ok

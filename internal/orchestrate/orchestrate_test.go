@@ -2,6 +2,7 @@ package orchestrate
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,7 +71,7 @@ func TestFullSlice_InitCreateApproveImplement(t *testing.T) {
 		t.Fatalf("unexpected spec create report target: %v", specReport.Target)
 	}
 
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
 
@@ -201,6 +202,119 @@ func (s *scriptedAdapter) Prepare(ctx adapter.Context) error {
 	return nil
 }
 
+// TestApprove_Twice_WritesOnlyOneGrantAndReportsAlreadyApproved is the direct regression guard
+// for the duplicate-grant bug: approving already-Approved content again must write nothing new
+// and must never prompt for identity.
+func TestApprove_Twice_WritesOnlyOneGrantAndReportsAlreadyApproved(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
+		t.Fatalf("first approve: %v", err)
+	}
+
+	promptCalled := false
+	failingPrompt := func(message string) (string, error) {
+		promptCalled = true
+		return "", fmt.Errorf("prompt should never be called")
+	}
+
+	report, err := Approve(root, "SPEC-001", failingPrompt, nil)
+	if err != nil {
+		t.Fatalf("second approve: %v (report: %+v)", err, report)
+	}
+	if promptCalled {
+		t.Fatalf("expected the identity prompt to never be invoked for an already-Approved re-approval")
+	}
+	if report.Outcome != present.Success {
+		t.Fatalf("expected Success, got %v", report.Outcome)
+	}
+	if !strings.Contains(report.Summary, "already Approved") {
+		t.Fatalf("expected the summary to say already Approved, got %q", report.Summary)
+	}
+
+	l, err := project.Locate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(filepath.Join(l.ApprovalsDir(), "SPEC-001"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var grantFiles, contentFiles int
+	for _, e := range entries {
+		switch {
+		case strings.HasSuffix(e.Name(), ".grant.json"):
+			grantFiles++
+		case strings.HasSuffix(e.Name(), ".content.md"):
+			contentFiles++
+		}
+	}
+	if grantFiles != 1 {
+		t.Fatalf("expected exactly one grant file after two approvals, got %d", grantFiles)
+	}
+	if contentFiles != 1 {
+		t.Fatalf("expected exactly one content snapshot after two approvals, got %d", contentFiles)
+	}
+}
+
+// TestApprove_ChangedContent_StillCreatesNewGrant proves the duplicate check only refuses an
+// identical-fingerprint re-approval — approving genuinely changed content keeps working exactly
+// as before.
+func TestApprove_ChangedContent_StillCreatesNewGrant(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
+		t.Fatalf("first approve: %v", err)
+	}
+
+	l, err := project.Locate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	specPath := filepath.Join(l.SpecificationsDir(), "SPEC-001-password-reset.md")
+	content, err := os.ReadFile(specPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(specPath, append(content, []byte("\nA new sentence changing meaning.\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Approve(root, "SPEC-001", nil, nil)
+	if err != nil {
+		t.Fatalf("second approve: %v", err)
+	}
+	if strings.Contains(report.Summary, "already Approved") {
+		t.Fatalf("expected a real new approval, not the already-Approved short-circuit, got %q", report.Summary)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(l.ApprovalsDir(), "SPEC-001"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var grantFiles int
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".grant.json") {
+			grantFiles++
+		}
+	}
+	if grantFiles != 2 {
+		t.Fatalf("expected two grant files (one per distinct approved content), got %d", grantFiles)
+	}
+}
+
 // TestApprove_NextRecommendsSpecWorkspaceAndImplementation is the direct regression guard for the
 // stale "gnomon implement <SPEC-id>" recommendation this command used to print — that command no
 // longer exists (it is reachable only through the Specification workspace or `gnomon run
@@ -215,7 +329,7 @@ func TestApprove_NextRecommendsSpecWorkspaceAndImplementation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	report, err := Approve(root, "SPEC-001", nil)
+	report, err := Approve(root, "SPEC-001", nil, nil)
 	if err != nil {
 		t.Fatalf("approve: %v", err)
 	}
@@ -273,7 +387,7 @@ func TestSpecWorkspaceNext_HighlightsAvailableAction(t *testing.T) {
 	if _, err := SpecCreate(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	l, err := project.Locate(root)
@@ -305,7 +419,7 @@ func TestApprove_RefusesWhenNoIdentityIsAvailable(t *testing.T) {
 	if _, err := SpecCreate(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err == nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err == nil {
 		t.Fatalf("expected approve to refuse when no Human identity can be resolved and no prompt is available")
 	}
 }
@@ -322,7 +436,7 @@ func setupApprovedSpec(t *testing.T) string {
 	if _, err := SpecCreate(root, "Password Reset"); err != nil {
 		t.Fatalf("spec create: %v", err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
 	return root

@@ -29,8 +29,7 @@ func Lifecycle(l project.Layout, specID string) (approval.Lifecycle, error) {
 }
 
 // Eligible derives whether a workflow may start for the given (optional) supplied Specification,
-// per its own declared specification_reference/requires_approved_specification — the exact rule
-// cli/WORKFLOW_CONTRACT.md defines, applied generically for any workflow's Contract.
+// per its own declared specification_reference/requires_approved_specification (cli/WORKFLOW_CONTRACT.md).
 func Eligible(l project.Layout, wf contract.Workflow, suppliedSpec string) (Eligibility, error) {
 	switch wf.SpecificationReference {
 	case contract.SpecReferenceNone:

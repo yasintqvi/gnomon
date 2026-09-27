@@ -80,10 +80,8 @@ func (l Layout) IsInitialized() bool {
 	return err == nil && v != ""
 }
 
-// MissingSections reports which canonical .gnomon/ subdirectories are absent — the structural-
-// integrity check `gnomon validate` performs, reusing exactly the same canonical layout
-// knowledge (bundledSections, plus approvals/) that Materialize already fills from, so the two
-// can never define "canonical layout" differently.
+// MissingSections reports which canonical .gnomon/ subdirectories are absent (`gnomon validate`'s
+// structural check), reusing the same layout knowledge Materialize fills from.
 func (l Layout) MissingSections() []string {
 	sections := append(append([]string{}, bundledSections...), "approvals")
 	var missing []string
