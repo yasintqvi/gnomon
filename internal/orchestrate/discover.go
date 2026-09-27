@@ -5,6 +5,7 @@ import (
 
 	"gnomon/internal/facts"
 	"gnomon/internal/present"
+	"gnomon/internal/project"
 	"gnomon/internal/specs"
 )
 
@@ -53,14 +54,22 @@ func DiscoverCandidate(root, agentOverride string, chooser AgentChooser) (*Disco
 		}, err
 	}
 
+	// Rule B, inlined: Discovery has no governing Specification of its own (kind is always
+	// targetNone), so only the "some OTHER Specification lost approval" check ever applies here —
+	// same mechanism execute uses on every other run, via the same shared helpers.
+	approvedBefore, snapErr := approvedIdentities(l)
+	if snapErr != nil {
+		return nil, nil, snapErr
+	}
+
 	outcome, detail, failureRep, err := obtainOutcome(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetNone, adapter: ad})
 	if failureRep != nil {
-		return nil, failureRep, err
+		return nil, discoveryLostApprovalsReport(l, approvedBefore, failureRep), err
 	}
 
 	if outcome.Terminal != "CANDIDATE_PROPOSED" {
 		rep, renderErr := classifyAndRender(wf, "", detail, outcome)
-		return nil, rep, renderErr
+		return nil, discoveryLostApprovalsReport(l, approvedBefore, rep), renderErr
 	}
 
 	title, _ := outcome.Payload["candidate_title"].(string)
@@ -74,12 +83,15 @@ func DiscoverCandidate(root, agentOverride string, chooser AgentChooser) (*Disco
 			},
 			Detail: detail,
 		}
-		return nil, rep, fmt.Errorf("discovery result missing candidate_title or candidate_identity")
+		return nil, discoveryLostApprovalsReport(l, approvedBefore, rep), fmt.Errorf("discovery result missing candidate_title or candidate_identity")
 	}
 	rationale, _ := outcome.Payload["rationale"].(string)
 	derivedFrom, _ := outcome.Payload["derived_from"].(string)
 	caveat, _ := outcome.Payload["non_blocking_caveat"].(string)
 
+	// CANDIDATE_PROPOSED returns a DiscoveryCandidate here, not a Report, so there is nothing to
+	// attach a lost-approval warning to at this point — the caller renders its own presentation
+	// from the candidate fields. Closing this one gap would mean changing this return shape.
 	return &DiscoveryCandidate{
 		Title:             title,
 		Identity:          identity,
@@ -87,6 +99,23 @@ func DiscoverCandidate(root, agentOverride string, chooser AgentChooser) (*Disco
 		DerivedFrom:       derivedFrom,
 		NonBlockingCaveat: caveat,
 	}, nil, nil
+}
+
+// discoveryLostApprovalsReport applies Rule B's "other Specification lost approval" warning to
+// rep, the same way execute's own deferred check does — Discovery never has a governing
+// Specification of its own, so only that side of the check ever applies here. A failure computing
+// it is silently ignored, exactly as in execute: this is a best-effort warning annotation, never a
+// reason to change the run's own outcome.
+func discoveryLostApprovalsReport(l project.Layout, approvedBefore map[string]bool, rep *present.Report) *present.Report {
+	if rep == nil {
+		return rep
+	}
+	lost, err := lostApprovals(l, approvedBefore, "")
+	if err != nil || len(lost) == 0 {
+		return rep
+	}
+	rep.Sections = append(rep.Sections, lostApprovalSection(lost))
+	return rep
 }
 
 // AcceptDiscoveryCandidate performs deterministic Draft Creation for an accepted candidate — the
