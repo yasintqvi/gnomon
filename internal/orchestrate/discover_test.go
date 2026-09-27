@@ -1,6 +1,9 @@
 package orchestrate
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"gnomon/internal/adapter"
@@ -166,5 +169,102 @@ func TestDiscoveryCandidate_Decline_NoMutation(t *testing.T) {
 	}
 	if len(ids) != 0 {
 		t.Fatalf("expected zero Specifications after declining, got %v", ids)
+	}
+}
+
+// --- Rule B for Discovery: discoveryLostApprovalsReport ---
+//
+// DiscoverCandidate has no seam to inject a tampering fake Adapter (it always resolves a real one
+// via ResolveAgent), so — following this file's own existing convention of testing the underlying
+// mechanism directly rather than the outer function — these exercise discoveryLostApprovalsReport
+// itself: the exact function DiscoverCandidate calls on every report-returning path.
+
+func TestDiscoveryLostApprovalsReport_OtherSpecLostApproval_WarningAppended(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Spec One"); err != nil {
+		t.Fatal(err) // SPEC-001
+	}
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	l, err := project.Locate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvedBefore, err := approvedIdentities(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !approvedBefore["SPEC-001"] {
+		t.Fatalf("expected SPEC-001 to be Approved before the simulated run, got %v", approvedBefore)
+	}
+
+	// Simulate the side effect a Discovery run's Agent could cause: some unrelated
+	// Specification's content changes mid-run, losing its approval — exactly what Rule B exists
+	// to catch, regardless of which workflow is running.
+	specPath := filepath.Join(l.SpecificationsDir(), "SPEC-001-spec-one.md")
+	content, err := os.ReadFile(specPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(specPath, appendSemanticEdit(content, "Changed mid-run."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rep := &present.Report{Outcome: present.Success, Summary: "NO_CANDIDATE_IDENTIFIED"}
+	got := discoveryLostApprovalsReport(l, approvedBefore, rep)
+	if got != rep {
+		t.Fatalf("expected the same Report instance returned")
+	}
+	rendered := present.Render(got, false)
+	if !strings.Contains(rendered, "Other Approvals Lost") || !strings.Contains(rendered, "SPEC-001") {
+		t.Fatalf("expected a warning that SPEC-001 lost approval, got: %s", rendered)
+	}
+}
+
+func TestDiscoveryLostApprovalsReport_NothingLost_ReportUnchanged(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Spec One"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	l, err := project.Locate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvedBefore, err := approvedIdentities(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rep := &present.Report{Outcome: present.Success, Summary: "NO_CANDIDATE_IDENTIFIED"}
+	got := discoveryLostApprovalsReport(l, approvedBefore, rep)
+	if len(got.Sections) != 0 {
+		t.Fatalf("expected no warning section when nothing lost approval, got: %+v", got.Sections)
+	}
+}
+
+func TestDiscoveryLostApprovalsReport_NilReport_ReturnsNil(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	l, err := project.Locate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := discoveryLostApprovalsReport(l, map[string]bool{}, nil); got != nil {
+		t.Fatalf("expected nil in, nil out, got %+v", got)
 	}
 }
