@@ -1,8 +1,6 @@
 // Package selfupdate implements `gnomon update`: downloading and installing the latest stable
-// Gnomon release over the currently running executable. It is deliberately independent of every
-// project-engineering concern — no .gnomon, no Specifications, no Agents, no workflow execution,
-// no Result Protocol — so it works identically from any directory, with or without a Gnomon
-// project present, exactly like `gnomon agent`.
+// Gnomon release over the currently running executable. Independent of every project-engineering
+// concern, so it works identically from any directory, with or without a Gnomon project present.
 package selfupdate
 
 import (
@@ -14,11 +12,9 @@ import (
 	"gnomon/internal/present"
 )
 
-// Options carries everything Run needs from its caller. Every field the underlying logic must be
-// deterministic and offline-testable over is supplied here rather than discovered internally
-// (runtime.GOOS/GOARCH, os.Executable) — so cmd/gnomon resolves real environment facts exactly
-// once, at the CLI edge, matching how it already resolves the working directory before calling
-// into internal/orchestrate.
+// Options carries everything Run needs from its caller — supplied here rather than discovered
+// internally (runtime.GOOS/GOARCH, os.Executable) so the underlying logic stays deterministic and
+// offline-testable.
 type Options struct {
 	// CurrentVersion is the running binary's own version (main.version, "dev" for a local build).
 	CurrentVersion string
@@ -31,11 +27,9 @@ type Options struct {
 	Fetcher Fetcher
 }
 
-// Run performs the entire update: check the latest stable release, compare it against
-// CurrentVersion, and — only if it is actually newer — download, verify, extract, and install it.
-// Progress is written to out as each step completes; out sees nothing at all when already
-// up to date. The installed executable is never touched until the downloaded artifact has already
-// passed checksum verification.
+// Run checks the latest stable release against CurrentVersion, and — only if newer — downloads,
+// verifies, extracts, and installs it. The installed executable is never touched until the
+// downloaded artifact has passed checksum verification.
 func Run(out io.Writer, opts Options) (*present.Report, error) {
 	rel, err := opts.Fetcher.LatestRelease(owner, repo)
 	if err != nil {
@@ -107,11 +101,9 @@ func Run(out io.Writer, opts Options) (*present.Report, error) {
 	}, nil
 }
 
-// isNewer reports whether latest is a real upgrade over current, using proper semantic-version
-// comparison (golang.org/x/mod/semver) rather than string equality. current is treated as
-// out of date whenever it is not itself a valid vMAJOR.MINOR.PATCH version — the case for an
-// ordinary local "dev" build — so `gnomon update` always offers to move such a build onto a real
-// release rather than refusing to compare it.
+// isNewer reports whether latest is a real upgrade over current, via semantic-version comparison.
+// current is treated as out of date whenever it isn't a valid vMAJOR.MINOR.PATCH version (an
+// ordinary local "dev" build), so `gnomon update` always offers to move it onto a real release.
 func isNewer(current, latest string) bool {
 	if !semver.IsValid(current) {
 		return true

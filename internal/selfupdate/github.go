@@ -8,10 +8,8 @@ import (
 	"time"
 )
 
-// owner/repo are Gnomon's own canonical, public GitHub repository — the same one README.md
-// already points Humans at for releases and issues. This is a fixed property of the project
-// itself, not a per-build or per-installation setting, so it is a plain constant rather than
-// something Options exposes for override.
+// owner/repo are Gnomon's canonical, public GitHub repository — a fixed property of the project,
+// not something Options exposes for override.
 const (
 	owner = "yasintqvi"
 	repo  = "gnomon"
@@ -24,9 +22,8 @@ type Asset struct {
 }
 
 // Release is the subset of a GitHub Release this package needs. Draft and Prerelease are carried
-// through rather than filtered out by Fetcher itself, so the "ignore prerelease/draft" rule (Run,
-// needsRelease) is ordinary, directly testable logic in this package rather than something a
-// Fetcher implementation is trusted to have already enforced.
+// through rather than filtered out by Fetcher itself, so the "ignore prerelease/draft" rule (Run)
+// is ordinary, testable logic here, not something a Fetcher implementation must already enforce.
 type Release struct {
 	TagName    string
 	Draft      bool
@@ -34,9 +31,8 @@ type Release struct {
 	Assets     []Asset
 }
 
-// Fetcher is the one seam between this package and the network — every live GitHub/HTTP call
-// goes through it, so tests supply a fake instead of ever reaching a real endpoint. Kept to
-// exactly the two operations Run actually needs.
+// Fetcher is the one seam between this package and the network, so tests supply a fake instead of
+// ever reaching a real endpoint. Kept to exactly the two operations Run needs.
 type Fetcher interface {
 	// LatestRelease returns the most recent release GitHub reports for owner/repo, by whatever
 	// its own API considers "latest" — callers decide separately whether it is actually usable
@@ -46,10 +42,9 @@ type Fetcher interface {
 	Download(url string) ([]byte, error)
 }
 
-// githubFetcher is Fetcher's real implementation: the GitHub REST API's own "get the latest
-// release" endpoint, which already excludes draft and prerelease releases by definition — Run's
-// own Draft/Prerelease check (see needsRelease) is defense in depth on top of that, never the
-// only thing enforcing it.
+// githubFetcher is Fetcher's real implementation: the GitHub REST API's "get the latest release"
+// endpoint. Run's own Draft/Prerelease check is defense in depth on top of that, never the only
+// thing enforcing it.
 type githubFetcher struct {
 	client *http.Client
 }

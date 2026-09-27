@@ -138,7 +138,7 @@ func TestStatus_MultipleSpecifications_AllListedNoCurrentSpecChosen(t *testing.T
 	if _, err := SpecCreate(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-002", nil); err != nil {
+	if _, err := Approve(root, "SPEC-002", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 

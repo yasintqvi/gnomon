@@ -48,10 +48,8 @@ built-in one is.`,
 			target = args[1]
 		}
 		report, findings, err := orchestrate.RunEvaluation(root, args[0], target, *runAgentFlag, agentChooserForInvocation())
-		// The interactive resolution loop is offered only for Verification/Review (the only two
-		// identities RunEvaluation ever returns findings for) and only with a real interactive
-		// terminal — a non-interactive invocation (scripts, CI) always falls through to the exact
-		// same renderReport behavior as before this existed, never prompting, never hanging.
+		// Offered only with a real interactive terminal — non-interactive invocations always fall
+		// through to plain renderReport, never prompting or hanging.
 		if len(findings) > 0 && stdinIsInteractive() {
 			return runEvaluationResolution(root, args[0], target, report, findings, err)
 		}

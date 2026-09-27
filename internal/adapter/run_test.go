@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"testing"
@@ -160,6 +161,80 @@ func TestRunWithPolling_WrongWorkflowNeverTerminatesEarly(t *testing.T) {
 	}
 	if status.ExitCode != 0 {
 		t.Fatalf("expected a clean natural exit, got exit code %d", status.ExitCode)
+	}
+}
+
+// startForTermination starts a real process and returns it alongside the same kind of exit
+// channel runWithPolling itself feeds terminateGracefully — letting these tests call
+// terminateGracefully directly, deterministically, without a real Agent binary.
+func startForTermination(t *testing.T, name string, args ...string) (*exec.Cmd, chan error) {
+	t.Helper()
+	cmd := exec.Command(name, args...)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	exitCh := make(chan error, 1)
+	go func() { exitCh <- cmd.Wait() }()
+	return cmd, exitCh
+}
+
+func TestTerminateGracefully_SignalFails_ForcesImmediately(t *testing.T) {
+	cmd, exitCh := startForTermination(t, "sleep", "10")
+
+	origSignal := sendTerminationSignal
+	sendTerminationSignal = func(*os.Process) error { return fmt.Errorf("signal not supported on this platform") }
+	defer func() { sendTerminationSignal = origSignal }()
+
+	start := time.Now()
+	if err := terminateGracefully(cmd, exitCh, 5*time.Second); err == nil {
+		t.Fatalf("expected an error from the forced kill's exit status")
+	}
+	elapsed := time.Since(start)
+
+	if elapsed > 2*time.Second {
+		t.Fatalf("expected immediate forced termination when the signal cannot be sent, took %v (well under the 5s timeout)", elapsed)
+	}
+}
+
+func TestTerminateGracefully_SignalSucceeds_ProcessExits_NoForcedKill(t *testing.T) {
+	cmd, exitCh := startForTermination(t, "sleep", "10")
+
+	killCalled := false
+	origKill := forceKill
+	forceKill = func(c *exec.Cmd) error { killCalled = true; return origKill(c) }
+	defer func() { forceKill = origKill }()
+
+	// "sleep" honors SIGTERM's default action (exit) — the real, un-injected signal is used here.
+	if err := terminateGracefully(cmd, exitCh, 5*time.Second); err == nil {
+		t.Fatalf("expected sleep's SIGTERM-terminated exit to be reported as an error")
+	}
+	if killCalled {
+		t.Fatalf("expected no forced kill when the process honors the graceful signal")
+	}
+}
+
+func TestTerminateGracefully_SignalIgnored_ForcedKillAfterTimeout(t *testing.T) {
+	cmd, exitCh := startForTermination(t, "sh", "-c", "trap '' TERM; sleep 10")
+	time.Sleep(100 * time.Millisecond) // let the trap actually install before signaling
+
+	killCalled := false
+	origKill := forceKill
+	forceKill = func(c *exec.Cmd) error { killCalled = true; return origKill(c) }
+	defer func() { forceKill = origKill }()
+
+	timeout := 300 * time.Millisecond
+	start := time.Now()
+	terminateGracefully(cmd, exitCh, timeout)
+	elapsed := time.Since(start)
+
+	if !killCalled {
+		t.Fatalf("expected a forced kill once the process ignored the signal and the timeout elapsed")
+	}
+	if elapsed < timeout {
+		t.Fatalf("expected to wait out the timeout before forcing, took only %v", elapsed)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("expected the short test timeout to be honored, not the production default, took %v", elapsed)
 	}
 }
 

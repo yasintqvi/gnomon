@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"gnomon/internal/approval"
 	"gnomon/internal/orchestrate"
@@ -18,11 +19,9 @@ const (
 	actionBack     = "__back__"
 )
 
-// runSpecBrowser is `gnomon spec` with no arguments and a real interactive terminal: list every
-// Specification, let the Human search/filter and navigate them, and offer Create/Discover as
-// pinned actions alongside the list. Opening a Specification hands off to runSpecWorkspace; when
-// that returns, the browser redraws itself with freshly re-derived state — nothing about
-// availability or the list is ever remembered across the loop.
+// runSpecBrowser is `gnomon spec` with no arguments: list every Specification, let the Human
+// search/filter and navigate them, and offer Create/Discover as pinned actions. Opening a
+// Specification hands off to runSpecWorkspace; the browser redraws with freshly re-derived state.
 func runSpecBrowser(root string) error {
 	for {
 		summaries, err := orchestrate.ListSpecsForRoot(root)
@@ -82,10 +81,8 @@ func truncate(s string, n int) string {
 	return s[:n-1] + "…"
 }
 
-// runSpecCreateInteractive asks for a title (a plain line prompt — text input, not a menu, so it
-// reuses stdinPrompt rather than a raw-mode widget) and, once given, performs the same
-// deterministic orchestrate.SpecCreate every gnomon spec create <title> call uses, then opens the
-// new Specification's workspace directly.
+// runSpecCreateInteractive asks for a title, performs the same orchestrate.SpecCreate every
+// gnomon spec create <title> call uses, then opens the new Specification's workspace directly.
 func runSpecCreateInteractive(root string) error {
 	title, err := stdinPrompt("Title for the new Specification (blank to cancel): ")
 	if err != nil {
@@ -146,10 +143,9 @@ func runSpecDiscoverInteractive(root string) error {
 	return runSpecWorkspace(root, report.Target)
 }
 
-// runSpecWorkspace is `gnomon spec <SPEC-id>`: print the derived state, then offer only the
-// currently-available actions as an interactive menu, re-deriving everything fresh after each one
-// completes. Unavailable actions are shown, with their reason, in the printed detail above the
-// menu rather than as disabled menu entries.
+// runSpecWorkspace is `gnomon spec <SPEC-id>`: print the derived state, then offer only currently-
+// available actions as a menu, re-deriving everything fresh after each one completes. Unavailable
+// actions are shown, with their reason, in the printed detail instead of as disabled entries.
 func runSpecWorkspace(root, id string) error {
 	for {
 		detail, err := orchestrate.SpecDetailForRoot(root, id)
@@ -184,10 +180,8 @@ func runSpecWorkspace(root, id string) error {
 	}
 }
 
-// lifecycleStyle applies the same semantic treatment Report Outcomes use to a Specification's
-// lifecycle: Approved is the positive, complete state (green, like Success); Draft still needs
-// action before it is (yellow, like Blocked) — never a failure color, since Draft is an ordinary,
-// expected state, not something gone wrong.
+// lifecycleStyle applies Report Outcome's own semantic colors: Approved green (like Success),
+// Draft yellow (like Blocked) — never a failure color, Draft is an ordinary, expected state.
 func lifecycleStyle(p present.Palette, lifecycle approval.Lifecycle) string {
 	if lifecycle == approval.Approved {
 		return p.Good(string(lifecycle))
@@ -195,11 +189,9 @@ func lifecycleStyle(p present.Palette, lifecycle approval.Lifecycle) string {
 	return p.Warn(string(lifecycle))
 }
 
-// renderSpecDetail builds the Specification workspace's header block: identity/title, current
-// lifecycle, metadata, revision history, and — separately from the action menu itself, which only
-// ever offers what is currently available — every unavailable action's own reason, so a Human
-// never has to guess why something is missing from the menu. Pulled out of printSpecDetail as its
-// own pure function specifically so this presentation is testable without a terminal.
+// renderSpecDetail builds the Specification workspace's header block: identity/title, lifecycle,
+// metadata, revision history, and every unavailable action's own reason, so a Human never has to
+// guess why something is missing from the menu.
 func renderSpecDetail(d *orchestrate.SpecDetail, p present.Palette) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n", p.Heading(fmt.Sprintf("%s — %s", d.ID, d.Title)))
@@ -207,19 +199,19 @@ func renderSpecDetail(d *orchestrate.SpecDetail, p present.Palette) string {
 	fmt.Fprintf(&b, "  Fingerprint: %s\n", p.Muted(short(d.Fingerprint)))
 	if d.ActiveGrant != nil {
 		fmt.Fprintf(&b, "  Approved by: %s\n", p.Muted(d.ActiveGrant.Approver))
-		fmt.Fprintf(&b, "  Approved at: %s\n", p.Muted(d.ActiveGrant.ApprovedAt))
+		fmt.Fprintf(&b, "  Approved at: %s\n", p.Muted(formatApprovalTime(d.ActiveGrant.ApprovedAt)))
 	}
 	if len(d.Revisions) > 0 {
 		fmt.Fprintf(&b, "  Revisions (%d, oldest first):\n", len(d.Revisions))
 		for i, r := range d.Revisions {
-			status := p.Muted("superseded") // never revoked, but content has since moved on
+			status := p.Muted("superseded") // never revoked, but not (or no longer) the active grant
 			switch {
 			case r.Revoked:
 				status = p.Bad("revoked")
 			case d.ActiveGrant != nil && d.ActiveGrant.GrantID == r.GrantID:
-				status = p.Good("current")
+				status = p.Good("active")
 			}
-			fmt.Fprintf(&b, "    %d. %s by %s at %s (%s)\n", i+1, p.Muted(short(r.Fingerprint)), r.Approver, r.ApprovedAt, status)
+			fmt.Fprintf(&b, "    %d. %s by %s at %s (%s)\n", i+1, p.Muted(short(r.Fingerprint)), r.Approver, formatApprovalTime(r.ApprovedAt), status)
 		}
 	}
 	var unavailable []string
@@ -229,13 +221,15 @@ func renderSpecDetail(d *orchestrate.SpecDetail, p present.Palette) string {
 		}
 	}
 	if len(unavailable) > 0 {
-		// Not wrapped in Muted as a whole: each entry already bolds its own verb name (Code), and
-		// nesting a second style inside Muted would reset the outer dim styling partway through
-		// the line, since ansiReset clears every attribute, not just the innermost one.
+		// Not wrapped in Muted as a whole: nesting styles would reset the outer one partway
+		// through, since ansiReset clears every attribute, not just the innermost one.
 		fmt.Fprintf(&b, "  Not currently available: %s\n", strings.Join(unavailable, "; "))
 	}
 	if len(d.Unreadable) > 0 {
 		fmt.Fprintf(&b, "  %s\n", p.Warn(fmt.Sprintf("Warning: %s could not be loaded; run `gnomon validate`.", strings.Join(d.Unreadable, ", "))))
+	}
+	if len(d.Placeholders) > 0 {
+		fmt.Fprintf(&b, "  %s\n", p.Warn(fmt.Sprintf("Contains %d template placeholders — run Define before approving.", len(d.Placeholders))))
 	}
 	return b.String()
 }
@@ -259,19 +253,27 @@ func short(fingerprint string) string {
 	return fingerprint
 }
 
-// runSpecAction dispatches one selected contextual action to the exact same Core operation the
-// removed dedicated commands used to call directly — the workspace is a presentation layer over
-// the same application logic, never a second implementation of it. Agent-invoking actions pass no
-// --agent override: gnomon spec itself registers no such flag (there is no per-invocation CLI
-// flag to read inside an interactive session), so resolution falls through to the persisted
-// default or, on first use, the same interactive chooser every other Agent-invoking path uses.
+// formatApprovalTime renders a Grant/Revocation record's own stored timestamp (RFC3339, with or
+// without fractional seconds) at second precision for display, falling back to the raw string
+// when it cannot be parsed rather than hiding it.
+func formatApprovalTime(raw string) string {
+	t, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		return raw
+	}
+	return t.UTC().Format("2006-01-02 15:04:05 UTC")
+}
+
+// runSpecAction dispatches one selected contextual action to the same Core operation the
+// dedicated commands use — the workspace is a presentation layer, never a second implementation.
+// Agent-invoking actions pass no --agent override, since gnomon spec registers no such flag.
 func runSpecAction(root, id, verb string) error {
 	switch verb {
 	case "define":
 		rep, err := orchestrate.SpecDefine(root, id, "", agentChooserForInvocation())
 		return renderInteractive(rep, err)
 	case "approve":
-		rep, err := orchestrate.Approve(root, id, stdinPrompt)
+		rep, err := orchestrate.Approve(root, id, stdinPrompt, approveConfirm)
 		return renderInteractive(rep, err)
 	case "revoke":
 		rep, err := orchestrate.Revoke(root, id, stdinPrompt)

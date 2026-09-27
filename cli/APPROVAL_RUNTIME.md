@@ -77,7 +77,7 @@ Filenames use a collision-resistant identifier generated independently per event
 - **`spec_identity`** — the Specification's stable identity (Discovery's identity rule), independent of filename.
 - **`fingerprint`** — the normalized-content fingerprint (below) of the exact content reviewed at grant time.
 - **`approver`** — the resolved Human attribution (below).
-- **`timestamp`** — informational/audit context; no derivation rule below depends on it, but Core's own "durable" property implies evidence should remain meaningfully inspectable later, and this costs nothing to include.
+- **`timestamp`** — UTC RFC 3339 with fractional seconds (nanosecond precision). Lifecycle derivation (Approved/Draft) never depends on it, but Revision ordering does: it is the only signal for "oldest first," so a new grant's timestamp is kept strictly later than every existing grant for that Specification — advanced by one nanosecond over the latest existing one when the clock alone would not guarantee that (coarse clock resolution, notably on Windows). Legacy records written at second precision remain valid; two of them landing in the same second sort deterministically (by grant id) but not necessarily chronologically.
 
 ## Revocation Record
 
@@ -90,6 +90,27 @@ Filenames use a collision-resistant identifier generated independently per event
 ```
 
 `revokes` references the specific grant's own filename stem — the same identifier that already uniquely names that grant, requiring no separate cross-reference scheme. A revocation record is **never** a modification of the grant it revokes; the grant file is never touched.
+
+## Evidence Validity
+
+Every grant and revocation record is checked against the same rules, by the same one function per record type, whether the check is running to derive Draft/Approved or to report `gnomon validate`'s own findings — a record is never treated as valid by one and invalid by the other.
+
+**Error** — the record is invalid and excluded from derivation entirely:
+- malformed JSON
+- a grant missing/empty `spec_identity`, `fingerprint`, or `approver`; or a `spec_identity` that does not match the directory it is stored in
+- a revocation missing/empty `revokes` or `revoked_by`
+- `timestamp` missing, or not parseable as RFC 3339 (with or without fractional seconds)
+- a file that is neither `*.grant.json`, `*.revocation.json`, nor `*.content.md`
+
+**Warning** — reported, but never affects derivation:
+- a revocation referencing a grant id that does not exist in the same directory
+- a content snapshot with no matching grant (can happen if a grant write failed after its snapshot was written)
+- more than one revocation for the same grant
+- an evidence directory for a Specification identity that has no Specification file
+
+A grant with no content snapshot is not reported at all — records written before snapshots existed are legitimate.
+
+`gnomon validate` exits non-zero when any error exists anywhere in the project, including approval evidence; warnings alone still exit zero but are always printed, grouped separately and after any errors.
 
 ---
 
@@ -108,14 +129,15 @@ No Markdown semantic AST, no section-by-section extraction, and no semantic-diff
 
 ## Derived Lifecycle Rule
 
-A Specification is **Approved** if and only if at least one grant record:
+**The latest approval decision counts.** Every valid grant record belonging to a Specification's identity is ordered by when it was granted (its timestamp, then its own record id as a tie-break for two grants written in the same instant — the identical ordering the CLI's own revision history already displays). The most recent one, call it **L**, is the only grant that can currently make the Specification Approved — regardless of whether some older grant happens to match current content.
 
-- belongs to that Specification's identity;
-- matches the current normalized-content fingerprint;
-- has valid Human attribution;
-- has not been revoked by any revocation record referencing it.
+A Specification is **Approved** if and only if:
 
-Otherwise, the Specification derives **Draft**.
+- L exists;
+- L has not been revoked by any revocation record referencing it;
+- L matches the current normalized-content fingerprint.
+
+Otherwise, the Specification derives **Draft** — including when L simply no longer matches current content, and including when L has been revoked, however many older grants might still happen to match. Revoking any grant other than L never changes this answer; only a new grant (which becomes the new L) or revoking L itself does.
 
 **No mutable `state: approved` field, or any equivalent cached value, is ever persisted anywhere** — not on the Specification, not in a separate file, not anywhere. Draft and Approved are never written down; they are the return value of this rule, recomputed fresh every time it is asked, from whatever content and evidence files currently, actually exist.
 
@@ -133,20 +155,23 @@ If Git identity cannot be resolved, the CLI prompts the Human for a one-time ide
 
 1. Resolve the target Specification's identity.
 2. Compute the fingerprint of its current content.
-3. Confirm this is an explicit Human action in the current session — never inferred from an Agent's reported result.
-4. Resolve Human attribution (above); refuse if none can be obtained.
-5. Write one new grant record.
-6. Re-derive lifecycle state (now Approved, by construction) and report it.
+3. If L (per the Derived Lifecycle Rule) already matches this exact fingerprint and has not been revoked, the Specification is already Approved for this content: write nothing further and report that state. Content matching only an older, non-latest grant is not exempted here — it falls through to step 7 below.
+4. If the Specification's template is readable, check its content for remaining template placeholders (whether Define was ever reached is not persisted, so this is the only available signal). If any remain, warn the Human, listing up to 5 and suggesting Define; with a real interactive terminal, ask for confirmation before continuing (default No — declining writes nothing and reports cancellation). Without one, print the warning and proceed — approval is never blocked by this check. A missing or unreadable template skips it silently.
+5. Confirm this is an explicit Human action in the current session — never inferred from an Agent's reported result.
+6. Resolve Human attribution (above); refuse if none can be obtained.
+7. Write one new grant record.
+8. Re-derive lifecycle state (now Approved, by construction — the new grant is now L) and report it.
 
-Re-approval — after any edit, semantic or otherwise — always creates a **new** grant record. Prior grant and revocation records are never modified or deleted.
+Re-approval after any edit, semantic or otherwise, always creates a **new** grant record. Re-approval of content that already matches L creates nothing new (step 3) — this is what keeps step 7 from ever producing a second active grant for the same content. Content matching only an older, non-latest grant is *not* a no-op: approving it writes a fresh grant, which becomes the new L — this is how a Human returns to an earlier version. Prior grant and revocation records are never modified or deleted.
 
 ## Revocation Operation
 
-1. Locate the grant record currently causing the Specification to derive Approved, if any.
-2. Confirm explicit Human action.
-3. Resolve Human attribution; refuse if none can be obtained.
-4. Write one new revocation record referencing that specific grant.
-5. Re-derive lifecycle state (now Draft, by construction — the derivation rule's own conditions, not a separate write) and report it.
+1. Confirm L (per the Derived Lifecycle Rule) currently makes the Specification Approved; refuse otherwise — there is nothing active to revoke, however many older grants might still happen to match current content.
+2. Locate every unrevoked grant record matching the current fingerprint — L itself, plus any legacy duplicate grant for the same content (evidence written before the Approval Operation's step 3 existed to prevent duplicates). Revoking every one keeps evidence tidy without changing which grant is L.
+3. Confirm explicit Human action.
+4. Resolve Human attribution once; refuse if none can be obtained.
+5. Write one new revocation record for each grant located in step 2 — each revocation record still references exactly one grant.
+6. Re-derive lifecycle state (now Draft, by construction — the derivation rule's own conditions, not a separate write) and report it.
 
 ---
 
@@ -158,13 +183,33 @@ A workflow declaring `requires_approved_specification: true` calls one small, ge
 
 An Agent's reported `READY_FOR_APPROVAL` — a workflow result, transported and structurally validated exactly per Step 5 — **never constitutes, implies, or triggers approval**, under any circumstance. Approval is created only by the explicit operation above, only on explicit Human action, entirely independent of what any Agent run reported. The CLI may use a `READY_FOR_APPROVAL` result to recommend that the Human consider approving next; the actual grant remains a wholly separate act.
 
-## Manual Specification Editing
+## Protection During Agent Runs
+
+An Agent process has ordinary filesystem write access for the duration of a run and could otherwise write, edit, or delete files under `.gnomon/approvals/` directly, bypassing the Approval/Revocation Operations above entirely. The CLI treats this exactly like any other attempt to grant or revoke approval outside those two explicit Human operations: not permitted.
+
+Before starting the Agent, the CLI snapshots every file under `.gnomon/approvals/`; after the run ends — regardless of whether it succeeded, failed, or was cancelled — it compares the directory again. Any difference restores the directory to its pre-run state and rejects the run outright, reporting it Failed, even if the Agent's own reported result was otherwise valid: a run is never accepted on the strength of evidence the Agent itself supplied.
+
+While a run is active, `gnomon approve`/`gnomon revoke` refuse — a Human approving or revoking in another terminal during the run would otherwise be undone by the restore step above.
+
+### The Governing Specification Must Not Change (Rule A)
+
+An Agent could otherwise achieve the same effect indirectly: not by touching `.gnomon/approvals/` at all, but by editing the governing Specification's own content mid-run to match whatever was actually built, so the Human's original approval is quietly reattached to different requirements. A workflow whose Contract declares `requires_approved_specification: true`, run with a Specification actually supplied, is protected against exactly this:
+
+Before the Agent starts, the CLI records that Specification's file path, exact bytes, and fingerprint. After the run ends — on every exit path, exactly like the approvals check above — it resolves the same identity again. A whitespace-only edit (same fingerprint) is not a violation and is left untouched; the Specification no longer resolving, resolving to a different file (a rename), or resolving to a different fingerprint all are. On a violation, the Agent's own version (and any other file now claiming the same identity) is preserved under the project's transient run directory for Human inspection, the original file is restored at its original path, and the run is rejected — Failed, never accepted, even if the Agent's reported result was otherwise valid. Code changes elsewhere in the repository are **not** reverted; the report says so explicitly, since the working tree may still contain work done against a requirement that briefly read differently. If both this and the approvals check above fire in the same run, both are reported together and both are restored.
+
+This does not apply to a workflow whose Contract does not require an Approved Specification (Specification Definition may freely edit its own, still-Draft, target) or to Knowledge Resolution (`specification_reference: none`), which exists specifically to apply a Human decision to authoritative knowledge, Specifications included.
+
+### Other Specifications Losing Approval Is Reported, Never Restored (Rule B)
+
+Every run, regardless of workflow, is also checked for a side effect Rule A does not cover: some *other* Specification, not the one this run governs, derived Approved beforehand and no longer does afterward (its content changed, or it was removed). This is reported as a warning on the run's own result — never restored, never a reason to reject — so that Knowledge Resolution's legitimate work (updating an Approved Specification as part of applying a Human decision) keeps working exactly as intended, while the loss of approval is never silently invisible. A Specification Rule A already governs and reported in full is never also listed here.
 
 Because lifecycle state is never cached, a Human editing a Specification outside any Gnomon workflow requires no invalidation step of any kind: the next time anything needs this Specification's state, the CLI recomputes the fingerprint of whatever content currently exists on disk and checks it against existing evidence, exactly as it always does. A representation-only edit leaves the fingerprint unchanged and Approved survives automatically; any other edit produces a fresh fingerprint that no existing grant matches, and Draft is derived — with nothing to invalidate, because nothing was ever cached.
 
 ## Git and Branch Behavior
 
 Evidence is committed like any other durable Gnomon artifact. Because every event is its own new file, two branches independently approving, revoking, or leaving a Specification's approval history untouched merge without conflict at the file level in the ordinary case. After a merge, lifecycle state is recomputed fresh against whatever content and evidence files the merge actually produced — never carried forward from either branch — so a branch that approved old content and a branch that changed the Specification correctly derive Draft once merged, with no special merge-conflict handling required for the lifecycle state itself.
+
+When both branches approved — each its own, different content — the merge leaves both grants in evidence, and the Derived Lifecycle Rule picks whichever is L by timestamp, regardless of which branch it came from. The Specification may therefore need to be approved again after the merge, even if the final merged content happens to match one of the two branches' own already-approved version.
 
 ---
 
@@ -173,12 +218,14 @@ Evidence is committed like any other durable Gnomon artifact. Because every even
 | Case | Resolution |
 |---|---|
 | No evidence exists for this Specification | Draft — the ordinary case for any never-approved Specification |
-| Fingerprint mismatch | Draft — the ordinary case for changed content |
-| The only matching grant has been revoked | Draft |
+| Fingerprint mismatch against L | Draft — the ordinary case for changed content |
+| L has been revoked | Draft, even if content still matches L exactly |
+| Content matches an older, non-latest grant, while a newer L exists that doesn't match | Draft — the older grant never becomes active again; approve again to make it L |
 | Malformed evidence file | Excluded from consideration; diagnostic warning surfaced; derivation proceeds using whatever other records remain readable |
 | Grant record missing attribution | Treated as invalid; excluded from derivation |
 | Specification deleted | Its evidence remains (append-only, never deleted), inert, surfaced only if explicitly inspected |
 | Multiple valid historical grants for one Specification | Normal and expected — one per historical approval cycle |
+| More than one unrevoked grant matches the same content (legacy duplicates) | Approved only if one of them is L; Revocation still clears every matching grant, not just L, to keep evidence tidy |
 | Manual evidence fabrication or editing | Treated exactly as manually editing a Specification's own content — inside the same existing repository trust boundary Gnomon already relies on everywhere else; no tamper-detection mechanism is introduced |
 
 **No case introduces a third lifecycle state.** Every case resolves to Draft, Approved, or a diagnostic warning accompanying one of those two.

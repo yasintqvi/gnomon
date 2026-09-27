@@ -7,10 +7,9 @@ import "os"
 // independent override (codex.go).
 const claudeExecutableEnvVar = "GNOMON_CLAUDE_EXECUTABLE"
 
-// ClaudeAdapter is the original v1 Adapter implementation, per cli/AGENT_ADAPTER.md — Terminal
-// Handoff to a real, fully interactive Claude Code subprocess. All mechanics are shared with
-// every Adapter via processAdapter; this type exists to be a distinct, resolvable provider
-// identity (see resolve.go), not to hold any Claude-specific behavior of its own.
+// ClaudeAdapter is Terminal Handoff to a real, fully interactive Claude Code subprocess
+// (cli/AGENT_ADAPTER.md). Mechanics are shared via processAdapter; this type exists only to be a
+// distinct, resolvable provider identity (resolve.go).
 type ClaudeAdapter struct {
 	*processAdapter
 }

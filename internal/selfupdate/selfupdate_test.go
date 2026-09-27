@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"gnomon/internal/present"
+	"gnomon/internal/testutil"
 )
 
 // fakeFetcher is the test double for Fetcher — the one seam Run depends on — so every test here
@@ -315,6 +316,8 @@ func TestRun_ExtractionFailure_ExecutableUntouched(t *testing.T) {
 // --- Run: replacement failure ---
 
 func TestRun_ReplacementFailure_ExecutableUntouched(t *testing.T) {
+	testutil.SkipIfPermissionsNotEnforced(t)
+
 	dir := t.TempDir()
 	target := filepath.Join(dir, "gnomon")
 	os.WriteFile(target, []byte("old binary"), 0o755)
@@ -322,9 +325,6 @@ func TestRun_ReplacementFailure_ExecutableUntouched(t *testing.T) {
 		t.Fatalf("making dir read-only: %v", err)
 	}
 	t.Cleanup(func() { os.Chmod(dir, 0o755) })
-	if os.Geteuid() == 0 {
-		t.Skip("running as root bypasses permission checks")
-	}
 
 	archive := makeTarGz(t, map[string][]byte{"gnomon": []byte("new binary")})
 	checksums := []byte(sha256HexForTest(archive) + "  gnomon_1.1.0_linux_amd64.tar.gz\n")

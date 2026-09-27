@@ -8,12 +8,9 @@ import (
 	"gnomon/internal/specs"
 )
 
-// DiscoveryCandidate is Specification Discovery's CANDIDATE_PROPOSED result, extracted from the
-// raw payload before generic rendering — the shape the interactive accept/cancel flow presents to
-// the Human. Identity is Discovery's own semantic-identity field (candidate_identity): a concise
-// summary the Agent provides specifically for Gnomon's mechanical filename normalization,
-// distinct from Title, which is only ever shown to the Human. Gnomon never derives one from the
-// other.
+// DiscoveryCandidate is Specification Discovery's CANDIDATE_PROPOSED result, presented to the
+// Human for accept/cancel. Identity (candidate_identity) drives filename normalization; Title is
+// shown to the Human only. Gnomon never derives one from the other.
 type DiscoveryCandidate struct {
 	Title             string
 	Identity          string
@@ -23,16 +20,13 @@ type DiscoveryCandidate struct {
 }
 
 // DiscoverCandidate runs Specification Discovery and returns a structured candidate when the
-// result is CANDIDATE_PROPOSED, for the interactive accept/cancel flow to present — the Agent
-// never creates anything itself; this function's caller decides, then AcceptDiscoveryCandidate
-// performs the actual, deterministic creation. For every other outcome (NO_CANDIDATE_IDENTIFIED,
-// BLOCKED, or a process/protocol failure), candidate is nil and the ordinary rendered Report is
-// returned instead, via the same classifyAndRender path every other workflow-invoking command
-// uses — never a duplicated rendering.
+// result is CANDIDATE_PROPOSED — the Agent never creates anything itself; the caller decides, then
+// AcceptDiscoveryCandidate performs the actual creation. For every other outcome, candidate is nil
+// and the ordinary rendered Report is returned via classifyAndRender instead.
 //
-// A CANDIDATE_PROPOSED result missing a non-empty candidate_identity is refused as a protocol
-// violation (present.Failed) rather than silently falling back to deriving one from the title:
-// that would cross the Agent/CLI normalization boundary this field exists to enforce.
+// A CANDIDATE_PROPOSED result missing candidate_identity is refused as a protocol violation rather
+// than falling back to deriving one from the title — that would cross the Agent/CLI normalization
+// boundary this field exists to enforce.
 func DiscoverCandidate(root, agentOverride string, chooser AgentChooser) (*DiscoveryCandidate, *present.Report, error) {
 	l, wf, workflowPath, err := prepareWorkflow(root, "specification-discovery.md")
 	if err != nil {
@@ -59,7 +53,7 @@ func DiscoverCandidate(root, agentOverride string, chooser AgentChooser) (*Disco
 		}, err
 	}
 
-	outcome, detail, failureRep, err := obtainWorkflowOutcome(root, l, wf, workflowPath, targetNone, "", ad)
+	outcome, detail, failureRep, err := obtainOutcome(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetNone, adapter: ad})
 	if failureRep != nil {
 		return nil, failureRep, err
 	}
@@ -96,10 +90,8 @@ func DiscoverCandidate(root, agentOverride string, chooser AgentChooser) (*Disco
 }
 
 // AcceptDiscoveryCandidate performs deterministic Draft Creation for an accepted candidate — the
-// Human's explicit authorization, never the Agent's own action. It reuses createDraftSpec, the
-// exact same Core operation gnomon spec create uses, with the candidate's semantic identity
-// (mechanically Slugified, never NLP-processed) determining the filename and the candidate's
-// title determining only the displayed heading.
+// Human's explicit authorization, never the Agent's own action. Reuses createDraftSpec (the same
+// operation gnomon spec create uses); the candidate's identity (Slugified) drives the filename.
 func AcceptDiscoveryCandidate(root string, candidate *DiscoveryCandidate) (*present.Report, error) {
 	if candidate == nil || candidate.Title == "" || candidate.Identity == "" {
 		return nil, fmt.Errorf("a candidate with both a title and identity is required")

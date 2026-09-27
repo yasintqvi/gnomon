@@ -36,7 +36,7 @@ func TestSpecDiscover_MapsToSpecificationDiscovery(t *testing.T) {
 			"derived_from":    "PROJECT.md Key Capabilities",
 		},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetNone, "", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetNone, target: "", adapter: scripted})
 	if err != nil {
 		t.Fatalf("spec discover: %v (report: %+v)", err, report)
 	}
@@ -74,7 +74,7 @@ func TestSpecDefine_MapsToSpecificationDefinition(t *testing.T) {
 			"consistency_check": "CLEAN",
 		},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetSpec, "SPEC-001", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetSpec, target: "SPEC-001", adapter: scripted})
 	if err != nil {
 		t.Fatalf("spec define: %v (report: %+v)", err, report)
 	}
@@ -108,7 +108,7 @@ func TestTest_MapsToTestingWorkflow(t *testing.T) {
 		FakeAdapter: &adapter.FakeAdapter{},
 		Payload:     map[string]interface{}{"outcome": "TESTING_COMPLETE", "evidence": "go test ./... passed"},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetSpec, "", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetSpec, target: "", adapter: scripted})
 	if err != nil {
 		t.Fatalf("test: %v (report: %+v)", err, report)
 	}
@@ -218,7 +218,7 @@ func TestSpecDefine_ReadyForApprovalNeverGrantsApproval(t *testing.T) {
 		FakeAdapter: &adapter.FakeAdapter{},
 		Payload:     map[string]interface{}{"outcome": "READY_FOR_APPROVAL", "target": "SPEC-001"},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetSpec, "SPEC-001", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetSpec, target: "SPEC-001", adapter: scripted})
 	if err != nil {
 		t.Fatalf("spec define: %v (report: %+v)", err, report)
 	}
@@ -263,7 +263,7 @@ func TestSpecDiscover_CandidateProposedNeverCreatesOrMutatesASpecification(t *te
 			"derived_from":    "PROJECT.md",
 		},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetNone, "", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetNone, target: "", adapter: scripted})
 	if err != nil {
 		t.Fatalf("spec discover: %v (report: %+v)", err, report)
 	}
@@ -302,7 +302,7 @@ func TestTest_BlockedIsNotProcessFailure(t *testing.T) {
 		FakeAdapter: &adapter.FakeAdapter{},
 		Payload:     map[string]interface{}{"outcome": "BLOCKED", "remaining_unresolved": "a governing Specification is not Approved"},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetSpec, "", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetSpec, target: "", adapter: scripted})
 	if err == nil {
 		t.Fatalf("expected a BLOCKED workflow conclusion to be reported as a non-nil error")
 	}

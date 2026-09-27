@@ -7,9 +7,8 @@ import (
 	"strings"
 )
 
-// parseChecksums reads GoReleaser's own checksums.txt format (checksum.algorithm: sha256 in
-// .goreleaser.yaml) — "<hex digest><spaces><filename>" per line, confirmed against a real
-// published checksums.txt — into a filename → hex-digest map.
+// parseChecksums reads checksums.txt's "<hex digest><spaces><filename>" per line, confirmed
+// against a real published file, into a filename → hex-digest map.
 func parseChecksums(data []byte) (map[string]string, error) {
 	sums := make(map[string]string)
 	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {

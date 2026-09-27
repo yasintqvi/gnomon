@@ -1,6 +1,9 @@
 package adapter
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestCodexPrepare_InvokesFullyInteractiveMode confirms CodexAdapter launches exactly
 // [executable, prompt] with no subcommand and no sandbox/approval flags, with stdio inherited —
@@ -9,12 +12,16 @@ import "testing"
 // doc comment for the exact inspected usage line this mirrors.
 func TestCodexPrepare_InvokesFullyInteractiveMode(t *testing.T) {
 	a := NewCodexAdapter()
-	if err := a.Prepare(Context{WorkflowIdentity: "implementation", ResultPath: "/tmp/x", RunID: "r"}); err != nil {
+	root := t.TempDir()
+	if err := a.Prepare(Context{ProjectRoot: root, WorkflowIdentity: "implementation", ResultPath: "/tmp/x", RunID: "r"}); err != nil {
 		t.Fatal(err)
 	}
 	args := a.cmd.Args
 	if len(args) != 2 {
-		t.Fatalf("expected exactly [executable, prompt] with no subcommand/sandbox/approval flags, got: %v", args)
+		t.Fatalf("expected exactly [executable, instruction] with no subcommand/sandbox/approval flags, got: %v", args)
+	}
+	if !strings.HasPrefix(args[1], "Read and follow the instructions in ") {
+		t.Fatalf("expected a short instruction pointing at the prompt file, got: %v", args)
 	}
 	if a.cmd.Args[0] != a.executable {
 		t.Fatalf("expected argv[0] to be the resolved executable, got %q", a.cmd.Args[0])
@@ -53,7 +60,7 @@ func TestNewCodexAdapter_UnaffectedByClaudeOverride(t *testing.T) {
 // byte-identical instructions for an identical Context — buildPrompt never names a provider, so
 // neither Adapter needs (or gets) its own variant.
 func TestCodexAdapter_UsesSameProviderNeutralPromptAsClaudeAdapter(t *testing.T) {
-	ctx := Context{WorkflowIdentity: "implementation", WorkflowPath: "x", ResultPath: "y", RunID: "z", SpecIdentity: "SPEC-001"}
+	ctx := Context{ProjectRoot: t.TempDir(), WorkflowIdentity: "implementation", WorkflowPath: "x", ResultPath: "y", RunID: "z", SpecIdentity: "SPEC-001"}
 
 	codex := NewCodexAdapter()
 	if err := codex.Prepare(ctx); err != nil {

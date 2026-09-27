@@ -179,3 +179,108 @@ func TestTitle_FallsBackToIdentity_WhenHeadingMissingOrMalformed(t *testing.T) {
 		t.Fatalf("expected fallback to identity for empty content, got %q", got)
 	}
 }
+
+func realTemplate(t *testing.T) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "specifications", "SPEC-000-use-case-name.md"))
+	if err != nil {
+		t.Fatalf("reading real repository template: %v", err)
+	}
+	return data
+}
+
+func TestRemainingPlaceholders_FreshDraftFromRealTemplate(t *testing.T) {
+	template := realTemplate(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "SPEC-000-use-case-name.md"), template, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path, err := CreateDraft(dir, "SPEC-001", "Mark a task complete", Slugify("Mark a task complete"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	remaining := RemainingPlaceholders(template, spec)
+	if len(remaining) == 0 {
+		t.Fatalf("expected an untouched draft to still report template placeholders")
+	}
+	for _, substituted := range []string{"[ID]", "[Use Case Name]", "[Use case name]"} {
+		for _, tok := range remaining {
+			if tok == substituted {
+				t.Fatalf("expected substituted token %q not to be reported, got %v", substituted, remaining)
+			}
+		}
+	}
+	found := map[string]bool{}
+	for _, tok := range remaining {
+		found[tok] = true
+	}
+	for _, want := range []string{"[Business rule]", "[Primary actor]", "[SPEC-ID]"} {
+		if !found[want] {
+			t.Fatalf("expected %q among remaining placeholders, got %v", want, remaining)
+		}
+	}
+}
+
+func TestRemainingPlaceholders_MarkdownLinksNeverReported(t *testing.T) {
+	template := []byte("See [`SPECIFICATION_LIFECYCLE.md`](../specifications/SPECIFICATION_LIFECYCLE.md) for details.\n[Business rule]\n")
+	spec := []byte("See [`SPECIFICATION_LIFECYCLE.md`](../specifications/SPECIFICATION_LIFECYCLE.md) for details.\n[Business rule]\n")
+	remaining := RemainingPlaceholders(template, spec)
+	if len(remaining) != 1 || remaining[0] != "[Business rule]" {
+		t.Fatalf("expected only [Business rule], got %v", remaining)
+	}
+}
+
+func TestRemainingPlaceholders_IgnoresInlineCodeAndFencedBlocks(t *testing.T) {
+	template := []byte("Use `[ID]` as the identity.\n\n```\nExample: [Not a placeholder]\n```\n\n[Business rule]\n")
+	spec := []byte("Use `[ID]` as the identity.\n\n```\nExample: [Not a placeholder]\n```\n\n[Business rule]\n")
+	remaining := RemainingPlaceholders(template, spec)
+	if len(remaining) != 1 || remaining[0] != "[Business rule]" {
+		t.Fatalf("expected only [Business rule], got %v", remaining)
+	}
+}
+
+func TestRemainingPlaceholders_FullyDefinedSpec_NoPlaceholders(t *testing.T) {
+	template := realTemplate(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "SPEC-000-use-case-name.md"), template, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path, err := CreateDraft(dir, "SPEC-001", "Mark a task complete", Slugify("Mark a task complete"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Replace every remaining bracketed placeholder with concrete content, simulating Define.
+	defined := bracketToken.ReplaceAll(spec, []byte("defined"))
+
+	remaining := RemainingPlaceholders(template, defined)
+	if len(remaining) != 0 {
+		t.Fatalf("expected no placeholders in a fully defined specification, got %v", remaining)
+	}
+}
+
+func TestRemainingPlaceholders_UserWrittenBracketsNotInTemplate_NotReported(t *testing.T) {
+	template := []byte("[Business rule]\n")
+	spec := []byte("[Business rule]\n\nSome [optional] note the Human wrote themselves.\n")
+	remaining := RemainingPlaceholders(template, spec)
+	if len(remaining) != 1 || remaining[0] != "[Business rule]" {
+		t.Fatalf("expected only [Business rule], got %v", remaining)
+	}
+}
+
+func TestRemainingPlaceholders_CustomTemplate_DetectsItsOwnPlaceholders(t *testing.T) {
+	template := []byte("# SPEC-[ID] — [Use Case Name]\n\n[Custom Field]\n\n[Another Field]\n")
+	spec := []byte("# SPEC-001 — Custom Thing\n\n[Custom Field]\n\n[Another Field]\n")
+	remaining := RemainingPlaceholders(template, spec)
+	if len(remaining) != 2 || remaining[0] != "[Custom Field]" || remaining[1] != "[Another Field]" {
+		t.Fatalf("expected both custom placeholders in order, got %v", remaining)
+	}
+}

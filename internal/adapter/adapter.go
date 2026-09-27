@@ -12,31 +12,19 @@ type Context struct {
 	WorkflowIdentity string
 	SpecIdentity     string // "" when not applicable
 
-	// Target is a free-form, untyped invocation target — used only by workflows whose own
-	// Contract declares specification_reference: none but which still accept an optional target
-	// argument (Verification, Review), per cli/WORKFLOW_CONTRACT.md's own explicit statement that
-	// such a target "is not necessarily a Specification at all." Mutually exclusive with
-	// SpecIdentity for any one invocation: a command populates exactly one of the two, or
-	// neither, never both.
+	// Target is a free-form, untyped invocation target (Verification, Review) — never checked as
+	// a Specification (cli/WORKFLOW_CONTRACT.md). Mutually exclusive with SpecIdentity.
 	Target     string // "" when not applicable
 	ResultPath string
 	RunID      string
 
-	// Handoff carries the finding that caused this run to be launched, when this invocation was
-	// dispatched from Gnomon's interactive Verification/Review finding-resolution loop — nil for
-	// every ordinary invocation. It is transient invocation context only: never persisted, never
-	// part of any Result Contract, gone the moment this one invocation ends. It explains WHY this
-	// run started; it is never a substitute for SpecIdentity/Target above, which remain this
-	// workflow's own, completely independent, normal target and eligibility requirements.
+	// Handoff carries the finding that caused this run to be launched — nil for every ordinary
+	// invocation, never persisted, never a substitute for SpecIdentity/Target's own requirements.
 	Handoff *ResolutionHandoff
 
-	// PollResult is called periodically while the Agent is still running, to check whether a
-	// valid terminal result now exists. It must be safe to call repeatedly and side-effect-free
-	// except for its final, successful call. The Adapter never interprets what "valid" means —
-	// that determination is Gnomon's Result Protocol; the caller injects it as a plain function
-	// so this package never imports Result Protocol or Contract types, preserving the rule that
-	// no Gnomon semantics live inside the Adapter. May be left nil, in which case the Adapter
-	// simply waits for the process to exit on its own, with no early detection or termination.
+	// PollResult checks periodically whether a valid terminal result now exists; safe to call
+	// repeatedly. Injected as a plain function so this package never imports Result Protocol
+	// types. Nil means the Adapter simply waits for the process to exit on its own.
 	PollResult func() (ready bool, err error)
 }
 
@@ -59,11 +47,8 @@ type Status struct {
 	ExitCode int
 	Err      error
 
-	// Terminated is true when Gnomon itself asked the process to stop — either because
-	// PollResult confirmed a valid result, or because Cancel() was called — as opposed to the
-	// process ending on its own (a Human ending the session directly, or a crash). This is what
-	// lets a presentation layer avoid describing an intentional post-success termination as a
-	// failure, without needing to inspect a raw exit code to guess at the reason.
+	// Terminated is true when Gnomon itself asked the process to stop (PollResult confirmed a
+	// result, or Cancel), so a presentation layer never describes it as an Agent failure.
 	Terminated bool
 }
 

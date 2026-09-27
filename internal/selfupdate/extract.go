@@ -10,10 +10,9 @@ import (
 	"strings"
 )
 
-// extractExecutable returns execName's raw bytes from archiveBytes — a flat archive (no
-// directory prefix; confirmed against a real published archive's contents) containing just the
-// built binary and LICENSE, per .goreleaser.yaml's archives.files. archiveName's extension
-// selects tar.gz vs zip handling; any other extension is refused rather than guessed at.
+// extractExecutable returns execName's raw bytes from archiveBytes — a flat archive (confirmed
+// against a real published one). archiveName's extension selects tar.gz vs zip handling; any
+// other extension is refused rather than guessed at.
 func extractExecutable(archiveBytes []byte, archiveName, execName string) ([]byte, error) {
 	switch {
 	case strings.HasSuffix(archiveName, ".zip"):

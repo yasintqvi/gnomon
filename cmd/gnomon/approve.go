@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -20,7 +21,7 @@ var approveCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		report, err := orchestrate.Approve(root, args[0], stdinPrompt)
+		report, err := orchestrate.Approve(root, args[0], stdinPrompt, approveConfirm)
 		return renderReport(report, err)
 	},
 }
@@ -34,6 +35,21 @@ func stdinPrompt(message string) (string, error) {
 		return scanner.Text(), nil
 	}
 	return "", scanner.Err()
+}
+
+// approveConfirm always prints the warning, then, only with a real interactive terminal, asks
+// before proceeding — defaulting to No. Non-interactive invocations always proceed after printing.
+func approveConfirm(warning string) (bool, error) {
+	fmt.Fprintln(os.Stderr, warning)
+	if !stdinIsInteractive() {
+		return true, nil
+	}
+	answer, err := stdinPrompt("Approve anyway? [y/N]: ")
+	if err != nil {
+		return false, err
+	}
+	answer = strings.ToLower(strings.TrimSpace(answer))
+	return answer == "y" || answer == "yes", nil
 }
 
 func init() {

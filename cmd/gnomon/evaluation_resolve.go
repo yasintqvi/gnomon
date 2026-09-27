@@ -17,26 +17,14 @@ const (
 
 // runEvaluationResolution is the interactive post-result loop for `gnomon run verification|review
 // <target>`, entered only when stdin is a real terminal and the run produced at least one
-// actionable finding (cmd/gnomon/run.go's own gate — see there for why this never runs for any
-// other workflow, and never runs non-interactively).
+// actionable finding (run.go's own gate).
 //
-// The responsibility model, per finding: the Evaluation Agent may have already recommended a
-// workflow (EvaluationFinding.RecommendedWorkflow — a closed, Contract-validated vocabulary of
-// real, dispatchable Gnomon workflows; see internal/orchestrate/evaluation.go). That
-// recommendation is only ever shown and offered for confirmation — never executed automatically,
-// and never interpreted here. The CLI orchestrates (present the recommendation, collect
-// authorization, validate eligibility, launch); the Agent reasons (everything about what the
-// finding means and what resolving it requires); the Human authorizes and, once a Resolution
-// Agent is running, makes whatever material decisions that Agent asks for directly in its own
-// session — the CLI is no longer part of that conversation. The Human either confirms the
-// recommended workflow, picks a different supported one, or skips the finding entirely; "Resolve
-// all" walks through every actionable finding this same way, one authorization at a time, rather
-// than bulk-authorizing whatever was recommended. Only once the Human has been through every
-// finding chosen for this round does Gnomon run a completely fresh, independent
-// Verification/Review invocation and loop back with the new result — the resolver is never the
-// authority that declares its own finding resolved; only a fresh evaluation is. No finding state
-// is ever written anywhere: choosing Exit simply exits, and a later invocation starts from
-// whatever the repository actually looks like, exactly as it does today.
+// Responsibility model: the CLI orchestrates (present the Agent's recommendation, collect
+// authorization, validate eligibility, launch) and the Agent reasons and resolves — the CLI is not
+// part of that conversation once a Resolution Agent is running. The Human confirms the recommended
+// workflow, picks a different one, or skips, one finding at a time; only once every finding chosen
+// for this round has been handled does Gnomon re-run Verification/Review fresh — a resolver never
+// declares its own finding resolved. No finding state is ever written anywhere.
 func runEvaluationResolution(root, identity, target string, report *present.Report, findings []orchestrate.EvaluationFinding, runErr error) error {
 	for {
 		fmt.Print(present.RenderWithOptions(report, present.RenderOptions{Verbose: verbose, Color: colorEnabled()}))
@@ -54,9 +42,7 @@ func runEvaluationResolution(root, identity, target string, report *present.Repo
 			{value: evalExit, label: "Exit"},
 		})
 		if err != nil || choice == evalExit {
-			// Ctrl+C/Ctrl+D/an unexpected read error are all treated as Exit, matching how
-			// runSpecWorkspace's own action menu already treats any error as "back out" — never
-			// persisting anything either way.
+			// Ctrl+C/Ctrl+D/a read error are all treated as Exit, same as runSpecWorkspace's menu.
 			return finishEvaluation(runErr)
 		}
 
@@ -82,10 +68,8 @@ func runEvaluationResolution(root, identity, target string, report *present.Repo
 			}
 		}
 		if !dispatched {
-			// The Human skipped every finding offered this round (or every attempted dispatch was
-			// refused by its own eligibility gate) — nothing ran, so nothing could have changed;
-			// re-show the same findings rather than spending another Agent invocation confirming
-			// what is already known.
+			// Nothing ran (skipped, or refused by eligibility) — re-show the same findings rather
+			// than re-evaluating what's already known.
 			continue
 		}
 
@@ -97,9 +81,7 @@ func runEvaluationResolution(root, identity, target string, report *present.Repo
 	}
 }
 
-// finishEvaluation mirrors renderReport's own exit-code convention (root.go): a non-nil error —
-// the evaluation's own Blocked/Failed state at the moment the Human stopped interacting —
-// exits non-zero; a clean end (no error, no remaining findings) exits zero. Called only after
+// finishEvaluation mirrors renderReport's own exit-code convention (root.go). Called only after
 // the relevant Report has already been printed.
 func finishEvaluation(err error) error {
 	if err != nil {
@@ -108,16 +90,10 @@ func finishEvaluation(err error) error {
 	return nil
 }
 
-// authorizeAndResolveFinding walks the Human through exactly one finding: shows it, including the
-// Evaluation Agent's own recommendation when it made one, then requires an explicit choice —
-// confirm that recommendation, pick a different supported workflow, or skip. Only on explicit
-// confirmation does it dispatch, carrying this finding as transient Resolution Handoff context
-// (never persisted, never a substitute for the resolution workflow's own normal target/
-// eligibility). From here on, any semantic resolution conversation — clarifying the finding,
-// determining what knowledge is affected, asking the Human for a material decision — belongs
-// entirely to the launched Resolution Agent's own interactive session; this function never asks
-// that kind of question itself. Returns dispatched=true only when a resolution Agent invocation
-// actually ran.
+// authorizeAndResolveFinding walks the Human through exactly one finding — show it, require an
+// explicit choice (confirm the recommendation, pick a different workflow, or skip) — then, only on
+// confirmation, dispatches, carrying the finding as transient Handoff context. Returns
+// dispatched=true only when a resolution Agent invocation actually ran.
 func authorizeAndResolveFinding(root, identity, target string, f orchestrate.EvaluationFinding) (dispatched bool, err error) {
 	p := present.NewPalette(colorEnabled())
 	fmt.Print(renderFindingDetail(f, p))
@@ -138,11 +114,9 @@ func authorizeAndResolveFinding(root, identity, target string, f orchestrate.Eva
 	return dispatchResolution(root, identity, target, f, approach)
 }
 
-// findingMenuItems builds the per-finding menu from the Evaluation Agent's own recommendation —
-// pure and side-effect-free so it is directly testable without a terminal. "Continue with <X>"
-// appears only when the recommendation is a real, validated, dispatchable workflow. "Choose
-// another workflow" and "Skip" are always offered. There is no case where the CLI offers to
-// itself conduct a semantic resolution conversation — that never appears in this menu.
+// findingMenuItems builds the per-finding menu. "Continue with <X>" appears only when the
+// recommendation is a real, validated, dispatchable workflow; "Choose another workflow" and "Skip"
+// are always offered.
 func findingMenuItems(f orchestrate.EvaluationFinding) []selectItem {
 	var items []selectItem
 	if f.RecommendedWorkflow != "" && orchestrate.IsDispatchableResolution(f.RecommendedWorkflow) {
@@ -153,9 +127,8 @@ func findingMenuItems(f orchestrate.EvaluationFinding) []selectItem {
 	return items
 }
 
-// promptResolutionApproach is the fallback/override path — the fixed set of resolution workflows
-// Gnomon actually knows how to dispatch, offered when the Human declines or has no Agent
-// recommendation to confirm. It is deliberately not the primary interaction.
+// promptResolutionApproach is the fallback/override path, offered when the Human declines or has
+// no Agent recommendation to confirm.
 func promptResolutionApproach() (string, error) {
 	choice, err := runSelectMenu("Choose a resolution workflow", []selectItem{
 		{value: orchestrate.ResolveWithImplementation, label: "Implementation"},
@@ -170,13 +143,9 @@ func promptResolutionApproach() (string, error) {
 }
 
 // dispatchResolution collects whatever this workflow's own normal target requires (an Approved
-// Specification for Implementation; an optional one for Testing; nothing for Knowledge
-// Resolution) — structural eligibility, never a semantic question about the finding — then runs
-// it through orchestrate.RunResolutionWorkflow, which enforces every existing eligibility gate
-// completely unmodified. Gnomon never infers, creates, or approves a Specification here, and the
-// finding itself is never used as a target. Once launched, the Resolution Agent owns all further
-// interaction with the Human directly, in its own session; this function's involvement ends at
-// dispatch.
+// Specification for Implementation, optional for Testing, none for Knowledge Resolution), then
+// runs it through orchestrate.RunResolutionWorkflow, which enforces eligibility unmodified. Gnomon
+// never infers, creates, or approves a Specification here.
 func dispatchResolution(root, identity, target string, f orchestrate.EvaluationFinding, approach string) (bool, error) {
 	if !orchestrate.IsDispatchableResolution(approach) {
 		return false, nil
@@ -217,19 +186,14 @@ func dispatchResolution(root, identity, target string, f orchestrate.EvaluationF
 	}
 	fmt.Print(present.RenderWithOptions(rep, present.RenderOptions{Verbose: verbose, Color: colorEnabled()}))
 	if runErr != nil {
-		// The chosen workflow refused — most commonly Implementation's Approved-Specification
-		// gate — or otherwise did not complete. Its own Report already explains why. Nothing was
-		// resolved; the caller does not re-evaluate on this finding's account.
+		// The chosen workflow refused or didn't complete — its own Report already explains why.
 		return false, nil
 	}
 	return true, nil
 }
 
-// renderFindingList is the finding block printed between a fresh evaluation's own Report and the
-// resolution menu — pure and Palette-driven, so it is directly testable without a terminal,
-// matching internal/present's own rendering conventions: bold identifiers (Code), and the same
-// closed Good/Warn/Bad semantic vocabulary Outcome symbols already use — never a new color
-// invented per classification.
+// renderFindingList is the finding block printed between a fresh evaluation's Report and the
+// resolution menu — pure and Palette-driven, so it's testable without a terminal.
 func renderFindingList(identity string, findings []orchestrate.EvaluationFinding, p present.Palette) string {
 	var b strings.Builder
 	b.WriteString("\n")
@@ -251,11 +215,8 @@ func renderFindingList(identity string, findings []orchestrate.EvaluationFinding
 }
 
 // renderFindingDetail is the fuller, single-finding view shown before authorizeAndResolveFinding's
-// own menu — evidence, and the Evaluation Agent's own recommendation when it made one, always
-// presented as a reference to confirm or override, never as something already decided.
-// "Decision required" is shown only when the Evaluation result actually carried that information
-// (Review only; Verification's EvaluationFinding never sets DecisionRequired) — purely
-// informational context, never something this function uses to choose a workflow.
+// menu. "Decision required" is shown only when the result actually carried that information
+// (Review only) — purely informational, never used to choose a workflow.
 func renderFindingDetail(f orchestrate.EvaluationFinding, p present.Palette) string {
 	var b strings.Builder
 	b.WriteString("\n")
@@ -306,10 +267,8 @@ func pluralize(n int, singular, plural string) string {
 	return plural
 }
 
-// classificationStyle maps each classification onto the same three-color vocabulary every other
-// Gnomon presentation already uses — DEFECT/FAIL read as a failure (red), RISK/UNVERIFIABLE/
-// KNOWLEDGE GAP as needing attention without being a hard failure (yellow) — never a distinct
-// color per classification, which would drift toward decoration rather than meaning.
+// classificationStyle maps each classification onto Gnomon's usual vocabulary: DEFECT/FAIL as
+// failure (red), RISK/UNVERIFIABLE/KNOWLEDGE GAP as needs-attention (yellow).
 func classificationStyle(p present.Palette, classification string) string {
 	switch classification {
 	case "DEFECT", "FAIL":
@@ -337,8 +296,6 @@ func resolutionLabel(approach string) string {
 
 // parseFindingSelection interprets the Human's typed finding IDs against the currently offered
 // findings — case-insensitive, whitespace-separated, order-preserving, duplicates collapsed.
-// Pure and side-effect-free so it is directly testable without a terminal; promptFindingSelection
-// is its only interactive caller.
 func parseFindingSelection(answer string, findings []orchestrate.EvaluationFinding) (selected []orchestrate.EvaluationFinding, invalid []string) {
 	byID := make(map[string]orchestrate.EvaluationFinding, len(findings))
 	for _, f := range findings {
@@ -361,10 +318,8 @@ func parseFindingSelection(answer string, findings []orchestrate.EvaluationFindi
 	return selected, invalid
 }
 
-// promptFindingSelection is parseFindingSelection's interactive wrapper. It reuses the existing
-// single-line stdinPrompt primitive rather than introducing a new multi-select widget — the
-// simplest existing input primitive consistent with the rest of the CLI — retrying on invalid
-// input and treating a blank answer as an explicit cancel back to the top-level finding menu.
+// promptFindingSelection is parseFindingSelection's interactive wrapper: retries on invalid input,
+// treats a blank answer as cancel back to the top-level finding menu.
 func promptFindingSelection(findings []orchestrate.EvaluationFinding) ([]orchestrate.EvaluationFinding, error) {
 	var ids []string
 	for _, f := range findings {

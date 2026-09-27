@@ -187,10 +187,10 @@ func TestNext_MultipleApprovedSpecifications_AllListedNoneChosen(t *testing.T) {
 	if _, err := SpecCreate(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-002", nil); err != nil {
+	if _, err := Approve(root, "SPEC-002", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -216,7 +216,7 @@ func TestNext_MixedDraftAndApproved_BothRepresentedDistinctly(t *testing.T) {
 	if _, err := SpecCreate(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-002", nil); err != nil {
+	if _, err := Approve(root, "SPEC-002", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 

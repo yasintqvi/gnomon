@@ -11,18 +11,15 @@ import (
 )
 
 // version is Gnomon's build version, reported by `gnomon --version`. "dev" is the value for an
-// ordinary local build; a real release build overrides it at compile time with
-// -ldflags "-X main.version=vX.Y.Z" — the smallest conventional Go mechanism for this, requiring
-// no new dependency and no version string duplicated anywhere else in the source tree. Step 14
-// owns tagging and actually cutting a release; this is only the injection point it will use.
+// ordinary local build; a release build overrides it at compile time with
+// -ldflags "-X main.version=vX.Y.Z". Step 14 owns tagging and cutting a release; this is only the
+// injection point it uses.
 var version = "dev"
 
 var verbose bool
 
-// Command groups, in the order they should appear in `gnomon --help` — a presentation grouping
-// only (cli/COMMAND_SURFACE.md's own categorization), never a change to any command's syntax,
-// hierarchy, or top-level/nested placement. approve and revoke remain top-level, grouped under
-// Specification, exactly as cli/COMMAND_SURFACE.md requires.
+// Command groups, in `gnomon --help` order — a presentation grouping only (cli/COMMAND_SURFACE.md),
+// never a change to any command's syntax or placement.
 const (
 	groupProject       = "project"
 	groupSpecification = "specification"
@@ -58,15 +55,13 @@ func init() {
 		&cobra.Group{ID: groupTool, Title: "Tool:"},
 		&cobra.Group{ID: groupAdvanced, Title: "Advanced:"},
 	)
-	// Shell completion is a Cobra default, not a designed part of the v1 command surface — kept
-	// functional (it still works if invoked directly) but out of the visible help listing, so it
-	// never reads as an advertised v1 feature.
+	// Shell completion is a Cobra default, not a designed v1 feature — kept functional but hidden
+	// from the help listing.
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 }
 
 // Execute runs the CLI, exiting non-zero on any command error. Only errors with no Report reach
-// here — a command that already produced a Report renders it and exits directly, since the
-// Report already explains the outcome and a second raw error line would be redundant.
+// here — a command with a Report renders and exits directly (renderReport), never a second line.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprint(os.Stderr, present.RenderErrorColor(err, colorEnabled()))
@@ -74,9 +69,8 @@ func Execute() {
 	}
 }
 
-// renderReport prints r in Gnomon's standard presentation, then, if err is non-nil, exits with a
-// failing status directly — bypassing Cobra's own error path so the Report is the only thing the
-// Human sees, rather than the Report followed by a second, lower-level "error: ..." line.
+// renderReport prints r, then exits with a failing status if err is non-nil — bypassing Cobra's
+// own error path so the Report is the only thing the Human sees.
 func renderReport(r *present.Report, err error) error {
 	if r == nil {
 		return err
@@ -88,12 +82,8 @@ func renderReport(r *present.Report, err error) error {
 	return nil
 }
 
-// colorEnabled decides, once per invocation, whether ANSI color is appropriate: never when
-// NO_COLOR is set (https://no-color.org, a convention Gnomon respects rather than reinvents), and
-// only when stdout is a real, interactive terminal — never for a redirected file, a pipe, or CI
-// log capture. term.IsTerminal (already a dependency, already used by select.go) correctly
-// distinguishes a real TTY from any other character device, unlike a bare os.ModeCharDevice
-// check.
+// colorEnabled decides whether ANSI color is appropriate: never when NO_COLOR is set
+// (https://no-color.org), and only when stdout is a real, interactive terminal.
 func colorEnabled() bool {
 	if _, set := os.LookupEnv("NO_COLOR"); set {
 		return false

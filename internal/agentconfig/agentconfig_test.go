@@ -1,9 +1,12 @@
 package agentconfig
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"gnomon/internal/testutil"
 )
 
 // sandboxHome points os.UserConfigDir() at a fresh temp directory for the duration of one test,
@@ -85,6 +88,7 @@ func TestSave_LeavesNoStrayTempFiles(t *testing.T) {
 // that was already durably saved — the write-to-temp-then-rename shape guarantees the real file
 // is only ever touched by the final, successful rename.
 func TestSave_FailureLeavesExistingConfigUntouched(t *testing.T) {
+	testutil.SkipIfPermissionsNotEnforced(t)
 	sandboxHome(t)
 	if err := Save(Config{DefaultProvider: "claude"}); err != nil {
 		t.Fatal(err)
@@ -111,6 +115,45 @@ func TestSave_FailureLeavesExistingConfigUntouched(t *testing.T) {
 	}
 	if cfg.DefaultProvider != "claude" {
 		t.Fatalf("expected the failed write to leave the prior config untouched, got %q", cfg.DefaultProvider)
+	}
+}
+
+// TestSave_RenameFailure_LeavesExistingConfigUntouched is
+// TestSave_FailureLeavesExistingConfigUntouched's permission-independent counterpart: it injects
+// the failure directly instead of relying on a real unwritable directory, so it runs — and
+// verifies the same atomicity guarantee — on every platform and user, root included.
+func TestSave_RenameFailure_LeavesExistingConfigUntouchedAndNoTempFile(t *testing.T) {
+	sandboxHome(t)
+	if err := Save(Config{DefaultProvider: "claude"}); err != nil {
+		t.Fatal(err)
+	}
+
+	origRename := renameFile
+	renameFile = func(oldpath, newpath string) error { return fmt.Errorf("simulated rename failure") }
+	t.Cleanup(func() { renameFile = origRename })
+
+	if err := Save(Config{DefaultProvider: "codex"}); err == nil {
+		t.Fatalf("expected Save to fail when rename fails")
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DefaultProvider != "claude" {
+		t.Fatalf("expected the failed write to leave the prior config untouched, got %q", cfg.DefaultProvider)
+	}
+
+	p, err := path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(filepath.Dir(p))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "config.json" {
+		t.Fatalf("expected no leftover temp file after a failed rename, got: %v", entries)
 	}
 }
 

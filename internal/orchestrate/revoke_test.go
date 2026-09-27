@@ -24,7 +24,7 @@ func TestRevoke_ApprovedBecomesNonApproved(t *testing.T) {
 	if _, err := SpecCreate(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -70,7 +70,7 @@ func TestRevoke_NextRecommendsSpecWorkspace(t *testing.T) {
 	if _, err := SpecCreate(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -83,6 +83,139 @@ func TestRevoke_NextRecommendsSpecWorkspace(t *testing.T) {
 	}
 }
 
+// TestRevoke_LegacyDuplicateGrants_RevokesAllAndDerivesDraft is the direct regression guard for
+// the duplicate-grant bug: two grants written directly (bypassing Approve's own duplicate check,
+// simulating evidence from before that check existed) must both be revoked, and the Specification
+// must derive Draft afterward — not remain Approved because one grant was left unrevoked.
+func TestRevoke_LegacyDuplicateGrants_RevokesAllAndDerivesDraft(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+
+	l, err := project.Locate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(filepath.Join(l.SpecificationsDir(), "SPEC-001-password-reset.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fp := approval.Fingerprint(content)
+	if err := approval.WriteGrant(l.ApprovalsDir(), "SPEC-001", fp, "Legacy <legacy@example.com>", content); err != nil {
+		t.Fatal(err)
+	}
+	if err := approval.WriteGrant(l.ApprovalsDir(), "SPEC-001", fp, "Legacy <legacy@example.com>", content); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := filepath.Join(l.ApprovalsDir(), "SPEC-001")
+	before, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var grantsBefore int
+	for _, e := range before {
+		if strings.HasSuffix(e.Name(), ".grant.json") {
+			grantsBefore++
+		}
+	}
+	if grantsBefore != 2 {
+		t.Fatalf("expected two legacy duplicate grants, got %d", grantsBefore)
+	}
+
+	state, err := facts.Lifecycle(l, "SPEC-001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != approval.Approved {
+		t.Fatalf("expected the duplicate grants to still derive Approved before revocation, got %v", state)
+	}
+
+	report, err := Revoke(root, "SPEC-001", nil)
+	if err != nil {
+		t.Fatalf("revoke: %v (report: %+v)", err, report)
+	}
+	if report.Outcome != present.Success {
+		t.Fatalf("expected Success, got %v", report.Outcome)
+	}
+
+	after, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var revocationsAfter int
+	for _, e := range after {
+		if strings.HasSuffix(e.Name(), ".revocation.json") {
+			revocationsAfter++
+		}
+	}
+	if revocationsAfter != 2 {
+		t.Fatalf("expected one revocation record per duplicate grant (2), got %d", revocationsAfter)
+	}
+
+	final, err := facts.Lifecycle(l, "SPEC-001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final != approval.Draft {
+		t.Fatalf("expected SPEC-001 to derive Draft once every duplicate grant is revoked, got %v", final)
+	}
+}
+
+// TestRevoke_ThenApproveAgain_ThenRevokeAgain proves the revoke→approve→revoke cycle keeps
+// working: a new grant created after a revocation is itself revocable.
+func TestRevoke_ThenApproveAgain_ThenRevokeAgain(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
+		t.Fatalf("first approve: %v", err)
+	}
+	if _, err := Revoke(root, "SPEC-001", nil); err != nil {
+		t.Fatalf("first revoke: %v", err)
+	}
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
+		t.Fatalf("second approve: %v", err)
+	}
+
+	l, err := project.Locate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := facts.Lifecycle(l, "SPEC-001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state != approval.Approved {
+		t.Fatalf("expected the fresh re-approval to derive Approved, got %v", state)
+	}
+
+	report, err := Revoke(root, "SPEC-001", nil)
+	if err != nil {
+		t.Fatalf("second revoke: %v (report: %+v)", err, report)
+	}
+	if report.Outcome != present.Success {
+		t.Fatalf("expected Success, got %v", report.Outcome)
+	}
+	final, err := facts.Lifecycle(l, "SPEC-001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final != approval.Draft {
+		t.Fatalf("expected SPEC-001 to derive Draft after the second revocation, got %v", final)
+	}
+}
+
 func TestRevoke_SpecificationContentUnmodified(t *testing.T) {
 	root := t.TempDir()
 	configureGitIdentity(t, root)
@@ -92,7 +225,7 @@ func TestRevoke_SpecificationContentUnmodified(t *testing.T) {
 	if _, err := SpecCreate(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -130,10 +263,10 @@ func TestRevoke_UnrelatedGrantsUntouched(t *testing.T) {
 	if _, err := SpecCreate(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-002", nil); err != nil {
+	if _, err := Approve(root, "SPEC-002", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -181,7 +314,7 @@ func TestRevoke_GrantFileItselfUntouched(t *testing.T) {
 	if _, err := SpecCreate(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -275,7 +408,7 @@ func TestRevoke_StaleFingerprint_NoActiveApprovalToRevoke(t *testing.T) {
 	if _, err := SpecCreate(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -318,7 +451,7 @@ func TestRevoke_Repeated_SameDeterministicBlockedResult(t *testing.T) {
 	if _, err := SpecCreate(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -376,7 +509,7 @@ func TestRevoke_MalformedGrantIsExcludedNotSilentlyRepaired(t *testing.T) {
 	}
 
 	// A malformed grant is excluded from consideration entirely (existing, inherited Derive/
-	// ActiveGrantID behavior) — never repaired, reinterpreted, or treated as a usable grant.
+	// ActiveGrantIDs behavior) — never repaired, reinterpreted, or treated as a usable grant.
 	report, err := Revoke(root, "SPEC-001", nil)
 	if err == nil {
 		t.Fatalf("expected refusal: the only evidence present is malformed, so there is nothing valid to revoke")
@@ -405,7 +538,7 @@ func TestRevoke_RefusesWhenNoIdentityIsAvailable(t *testing.T) {
 	if _, err := SpecCreate(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
 

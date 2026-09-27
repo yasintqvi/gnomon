@@ -17,27 +17,16 @@ func renderPayloadSections(rc contract.ResultContract, payload map[string]interf
 	return renderObjectSections(rc, "", strings.Split(rc.TerminalPath, "."), payload)
 }
 
-// renderObjectSections renders one JSON object's own fields as Sections, in the order the Result
-// Contract's own schema declared them (contract.ResultContract.PropertyOrder, keyed by this
-// object's own dotted path) — never a hardcoded per-workflow field name. Path-aware terminal
-// suppression happens here, generically, at whatever nesting depth the schema actually declares:
-// a field matching the next unconsumed segment of the terminal path is either the terminal leaf
-// itself (the last segment — suppressed entirely, already reflected in the Report's Outcome/
-// Summary) or a container the terminal value lives inside (an earlier segment — rendered by
-// recursing into it, so every sibling field at every level still renders, and only the one true
-// leaf is ever hidden). Every other field renders normally, absent/null/empty values omitted.
-//
-// path is this object's own PropertyOrder key ("" at the schema root, "summary" one level down,
-// and so on). remainingTerminal is the terminal path's segments still to be matched from this
-// object downward — once it no longer matches any field here, every field at and below this
-// point renders unconditionally, exactly as a flat, unrelated object always has.
+// renderObjectSections renders one JSON object's fields as Sections, in the schema's own declared
+// order (rc.PropertyOrder, keyed by dotted path) — never a hardcoded field name. A field matching
+// the next unconsumed segment of remainingTerminal is either the terminal leaf itself (suppressed —
+// already reflected in the Report's Outcome/Summary) or a container the terminal value lives
+// inside (recursed into, so its own sibling fields still render). Every other field renders
+// normally, absent/null/empty values omitted.
 func renderObjectSections(rc contract.ResultContract, path string, remainingTerminal []string, obj map[string]interface{}) []present.Section {
 	order := rc.PropertyOrder[path]
 	if len(order) == 0 {
-		// Defensive fallback only — Validate() already guarantees a schema with a declared
-		// terminal property, so PropertyOrder is expected to be non-empty for any Contract that
-		// reached this point. Falls back to this object's own keys, sorted, rather than silently
-		// rendering nothing.
+		// Defensive fallback only — Validate() already guarantees PropertyOrder is non-empty here.
 		for k := range obj {
 			order = append(order, k)
 		}
@@ -71,11 +60,7 @@ func renderObjectSections(rc contract.ResultContract, path string, remainingTerm
 }
 
 // renderFieldValue renders one payload field's value as plain text, generically over every shape
-// the restricted Result Contract schema vocabulary (type/enum/required/properties/items) can
-// produce: absent/null renders as "" (omitted by the caller); a string renders trimmed; a boolean
-// renders as Yes/No; a number renders in its shortest decimal form; an array renders as one line
-// per item (each object item rendered as its own small labeled block); an object renders as a
-// small labeled block. No case here ever inspects a specific field name.
+// the Result Contract schema vocabulary can produce — never by inspecting a specific field name.
 func renderFieldValue(v interface{}) string {
 	switch val := v.(type) {
 	case nil:
@@ -114,12 +99,9 @@ func renderList(items []interface{}) string {
 	return strings.Join(lines, "\n")
 }
 
-// renderObject renders one object (e.g. one finding, one obligation) as a small indented block:
-// a leading "- " bullet on its first field, every other field on its own continuation line below
-// it — so a list of several findings or evidence entries reads as a sequence of clearly separated
-// items rather than one dense, semicolon-joined line each. Its own fields are sorted
-// alphabetically — unlike the top-level payload, an array item's shape comes from the schema's
-// `items`, not `properties`, so there is no declared top-level order to draw on here.
+// renderObject renders one object (e.g. one finding) as a small indented block: a leading "- "
+// bullet on its first field, every other field on its own continuation line. Fields are sorted
+// alphabetically — an array item's shape comes from the schema's `items`, with no declared order.
 func renderObject(obj map[string]interface{}) string {
 	keys := make([]string, 0, len(obj))
 	for k := range obj {
@@ -149,16 +131,14 @@ func renderObject(obj map[string]interface{}) string {
 	return b.String()
 }
 
-// indentContinuation aligns any embedded newline within a single field's own rendered value (a
-// multi-line string field, say) under the 4-space continuation indent renderObject otherwise only
-// applies between fields — so a field's internal line breaks never dedent back to column zero.
+// indentContinuation aligns an embedded newline in a field's own value under renderObject's
+// 4-space continuation indent, so it never dedents back to column zero.
 func indentContinuation(s string) string {
 	return strings.ReplaceAll(s, "\n", "\n    ")
 }
 
-// humanizeFieldName turns a snake_case schema field name into a Title Case label — the one place
-// presentation ever derives text from a field name, and it does so mechanically (splitting on
-// "_" and capitalizing each word), never by matching a specific known name.
+// humanizeFieldName turns a snake_case schema field name into a Title Case label — mechanically,
+// never by matching a specific known name.
 func humanizeFieldName(field string) string {
 	parts := strings.Split(field, "_")
 	for i, p := range parts {
@@ -170,13 +150,9 @@ func humanizeFieldName(field string) string {
 	return strings.Join(parts, " ")
 }
 
-// humanizeTerminalValue turns a workflow's own SCREAMING_SNAKE_CASE terminal value into a
-// natural sentence fragment — e.g. "IMPLEMENTATION_COMPLETE" -> "Implementation complete",
-// "BLOCKED" -> "Blocked", "KNOWLEDGE GAP" -> "Knowledge gap" — the one generic transform every
-// workflow's terminal vocabulary already fits, since each declares its values as underscore- (or,
-// in one case, space-) separated words for exactly this reason. This is the Report's Summary; it
-// never repeats the workflow's identity or name, matching how every other command's Report has
-// always read.
+// humanizeTerminalValue turns a workflow's SCREAMING_SNAKE_CASE terminal value into a sentence
+// fragment, e.g. "IMPLEMENTATION_COMPLETE" -> "Implementation complete". This becomes the Report's
+// Summary; it never repeats the workflow's identity or name.
 func humanizeTerminalValue(v string) string {
 	words := strings.Split(v, "_")
 	for i, w := range words {

@@ -209,7 +209,7 @@ func TestRun_ConvergesWithVerify_NestedTerminalPathAndBlockedClassification(t *t
 	if kind != targetGeneric {
 		t.Fatalf("expected targetGeneric for specification_reference: none, got %v", kind)
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, kind, "src/", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: kind, target: "src/", adapter: scripted})
 	if err == nil {
 		t.Fatalf("expected a BLOCKED workflow conclusion to be reported as a non-nil error")
 	}

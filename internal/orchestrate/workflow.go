@@ -14,18 +14,9 @@ import (
 	"gnomon/internal/result"
 )
 
-// targetKind distinguishes how a command's optional target argument relates to the workflow it
-// invokes — invocation-shape configuration fixed per command (the same category of fact a
-// command's own argument arity already is: implement's <SPEC-id> is required, verify's [target]
-// is optional and untyped, describe takes no argument at all), never a switch over a workflow's
-// own runtime result. Result interpretation (classification, rendering) remains entirely
-// Contract-driven regardless of which kind a given invocation used.
-//
-// Verification and Review deliberately take a generic, untyped target per their own Workflow
-// Contract (specification_reference: none) — cli/WORKFLOW_CONTRACT.md is explicit that this is
-// "not necessarily a Specification at all," so it is never checked for existence or lifecycle the
-// way a real Specification identity is, and the Agent is never told it is one (adapter.Context.Target
-// vs. SpecIdentity; see internal/adapter/process.go's buildPrompt).
+// targetKind is invocation-shape configuration fixed per command, never derived from a workflow's
+// runtime result. targetGeneric (verify, review) is never existence/lifecycle-checked and is
+// never described to the Agent as a Specification — cli/WORKFLOW_CONTRACT.md, specification_reference: none.
 type targetKind int
 
 const (
@@ -34,23 +25,29 @@ const (
 	targetGeneric                   // a free-form, untyped target — never checked (verify, review)
 )
 
-// Implement performs `gnomon implement <SPEC-id>`. Pre-start eligibility is checked first,
-// deterministically, with no Agent provider resolved — and therefore no first-use "choose your
-// Agent" prompt ever shown — if it fails. This ordering is what keeps an ineligible invocation
-// (a Draft Specification, say) from provoking a provider prompt for a run that was always going
-// to be refused. Only once eligible does ResolveAgent (agent.go) run, exactly once, to obtain the
-// Adapter this run will use; orchestration never constructs a ClaudeAdapter or CodexAdapter
-// itself.
+// runRequest carries everything one Agent-invoking run needs. handoff's zero value means no
+// handoff; a nil adapter means "resolve one via agentOverride/chooser"; a non-nil one is used as-is.
+type runRequest struct {
+	root          string
+	l             project.Layout
+	wf            contract.Workflow
+	workflowPath  string
+	kind          targetKind
+	target        string
+	handoff       ResolutionHandoff
+	agentOverride string
+	chooser       AgentChooser
+	adapter       adapter.Adapter
+}
+
+// Implement performs `gnomon implement <SPEC-id>`. Eligibility is checked before any Agent
+// provider is resolved, so an ineligible invocation never triggers the first-use provider prompt.
 func Implement(root, specID, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	return implementWithHandoff(root, specID, ResolutionHandoff{}, agentOverride, chooser)
 }
 
-// implementWithHandoff is Implement's sibling for the interactive finding-resolution loop, which
-// is the only caller that ever supplies a non-empty ResolutionHandoff (cmd/gnomon, via
-// RunResolutionWorkflow). Implement's own eligibility logic — in particular the Approved-
-// Specification gate — is unchanged and unduplicated: it lives here exactly once, and Implement
-// is now a one-line delegator to this with a zero-value handoff, so every existing caller and
-// test is unaffected.
+// implementWithHandoff is Implement's sibling for the interactive finding-resolution loop
+// (cmd/gnomon, via RunResolutionWorkflow), the only caller that supplies a non-empty handoff.
 func implementWithHandoff(root, specID string, handoff ResolutionHandoff, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	l, wf, elig, err := prepareImplementation(root, specID)
 	if err != nil {
@@ -64,264 +61,159 @@ func implementWithHandoff(root, specID string, handoff ResolutionHandoff, agentO
 			Sections: []present.Section{
 				{Label: "Unresolved", Body: elig.Reason},
 			},
-			// The specific reason (already shown above) may be anything facts.Eligible checks —
-			// not approved yet, not found, an unsupported Contract version — so this points at
-			// the workspace rather than assuming which one it is and naming a specific next
-			// action that might not actually apply.
+			// The reason varies (not approved, not found, ...), so point at the workspace rather
+			// than guessing a specific next action.
 			Next: specWorkspaceNext(l, specID, ""),
 		}, fmt.Errorf("ineligible: %s", elig.Reason)
 	}
 
 	workflowPath := filepath.Join(l.WorkflowsDir(), "implementation.md")
-	return runResolutionAgent(root, l, wf, workflowPath, targetSpec, specID, handoff, agentOverride, chooser)
+	rep, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetSpec, target: specID, handoff: handoff, agentOverride: agentOverride, chooser: chooser})
+	return rep, err
 }
 
-// DescribeSuccessNext and BootstrapSuccessNext are the one place each onboarding recommendation's
-// text is written — Describe/Bootstrap below, their own tests, and cmd/gnomon's own registered-
-// command cross-check (TestBootstrapNext/TestDescribeNext_RecommendARegisteredCommand) all
-// reference these exported constants rather than each hardcoding a separate copy, specifically so
-// they can never silently drift apart the way Bootstrap's own recommendation once did (it named a
-// "gnomon spec discover" command that no longer exists, undetected because its own test asserted
-// against its own duplicated copy of the same stale literal rather than a shared source, and
-// neither was ever checked against the real registered CLI command tree).
-//
-// Both name only a bare command (describe→bootstrap, bootstrap→spec): onboarding is the one case
-// where the next step is fixed by the onboarding sequence itself (cli/PROJECT_INITIALIZATION.md),
-// not by a Specification's own derived eligibility — unlike specWorkspaceNext, there is no
-// SpecActions-style authoritative source to derive an onboarding step from, so this remains a
-// plain constant rather than something computed.
+// DescribeSuccessNext and BootstrapSuccessNext are the single source for each onboarding
+// recommendation's text — referenced by Describe/Bootstrap, their tests, and cmd/gnomon's
+// registered-command cross-check, so they can't silently drift from the real CLI command tree.
+// Onboarding's next step is fixed by cli/PROJECT_INITIALIZATION.md, not derived like
+// specWorkspaceNext's, so a plain constant is enough.
 const (
 	DescribeSuccessNext  = "gnomon bootstrap"
 	BootstrapSuccessNext = "gnomon spec\n  Create a Specification directly, or have an Agent propose one (Discover)."
 )
 
-// Describe performs `gnomon describe`, wired directly to Initial Knowledge Establishment
-// (workflows/initial-knowledge-establishment.md) — Core's own workflow identity and the sole
-// authority for this command's responsibility, inputs, eligibility, and Result semantics;
-// "describe" is only the Human-facing CLI verb (cli/COMMAND_SURFACE.md), never a separate
-// workflow. It takes no target: the Contract declares specification_reference: none, and Core's
-// text never names any Specification this workflow depends on.
-//
-// describe hands control to the Agent with no CLI-collected input beyond the ordinary invocation
-// context: the workflow itself is responsible for inspecting available evidence and asking the
-// Human directly, inside the same interactive session, when material project knowledge cannot be
-// established from it — see Initial Knowledge Establishment's own Execution steps. The CLI does
-// not attempt to classify a project as "new" or "existing" beforehand; that judgment belongs to
-// the Agent, which can actually inspect the repository.
+// Describe performs `gnomon describe`, wired to workflows/initial-knowledge-establishment.md.
+// It takes no target, and the CLI does not pre-classify the project as new/existing — the Agent
+// inspects the repository and asks the Human directly when knowledge can't be established from it.
 func Describe(root, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	rep, err := runNoTargetWorkflow(root, "initial-knowledge-establishment.md", agentOverride, chooser)
 	onboardingNext(rep, DescribeSuccessNext)
 	return rep, err
 }
 
-// Bootstrap performs `gnomon bootstrap`, wired directly to workflows/bootstrap.md — a distinct
-// Core workflow from Initial Knowledge Establishment, never merged with it: Bootstrap's own
-// prose assumes Initial Knowledge Establishment's baseline already exists, and neither one's
-// responsibility is folded into the other here.
+// Bootstrap performs `gnomon bootstrap`, wired to workflows/bootstrap.md — distinct from, and
+// assuming the baseline of, Initial Knowledge Establishment.
 func Bootstrap(root, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	rep, err := runNoTargetWorkflow(root, "bootstrap.md", agentOverride, chooser)
 	onboardingNext(rep, BootstrapSuccessNext)
 	return rep, err
 }
 
-// onboardingNext sets Next to onSuccess only on a Success Outcome. Describe and Bootstrap's
-// Result Contracts each declare exactly one success terminal value, so Success here is never
-// ambiguous about which one occurred.
+// onboardingNext sets Next to onSuccess only on a Success Outcome.
 func onboardingNext(rep *present.Report, onSuccess string) {
 	if rep != nil && rep.Outcome == present.Success {
 		rep.Next = onSuccess
 	}
 }
 
-// Finalize performs `gnomon finalize`, wired directly to workflows/git-finalization.md. It takes
-// no target and enforces no CLI-level authorization gate beyond the ordinary eligibility check:
-// Git Finalization's one hard rule (work governed by a Draft Specification is ineligible to
-// finalize) has no deterministic mapping from an arbitrary change to the Specification(s) that
-// govern it — cli/WORKFLOW_CONTRACT.md already documents this as entirely Agent-side reasoning,
-// correctly reflected by the workflow's own specification_reference: none, not a gap this command
-// needs to fill by inventing state. Gnomon itself never commits, pushes, or publishes anything —
-// every one of those actions, and whether it is authorized, is decided entirely by the Agent
-// following the workflow's own Rules; the CLI's role here is exactly what it is for every other
-// Agent-invoking command: launch, watch for a valid result, terminate, report.
+// Finalize performs `gnomon finalize`, wired to workflows/git-finalization.md. It takes no target
+// and adds no authorization gate beyond ordinary eligibility: whether a commit/push/publish is
+// authorized is decided entirely by the Agent following the workflow's own Rules, never by Gnomon.
 func Finalize(root, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	return runNoTargetWorkflow(root, "git-finalization.md", agentOverride, chooser)
 }
 
-// Verify performs `gnomon verify [target]`, wired directly to workflows/verification.md. target
-// is deliberately generic/untyped per the workflow's own Contract (specification_reference:
-// none) — never checked for existence or lifecycle, and never described to the Agent as a
-// Specification (see targetKind above).
+// Verify performs `gnomon verify [target]`, wired to workflows/verification.md. target is
+// generic/untyped (see targetKind).
 func Verify(root, target, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	return runGenericTargetWorkflow(root, "verification.md", target, agentOverride, chooser)
 }
 
-// Review performs `gnomon review [target]`, wired directly to workflows/review.md. Same
-// generic/untyped target treatment as Verify, for the same Core-stated reason.
+// Review performs `gnomon review [target]`, wired to workflows/review.md. Same generic/untyped
+// target treatment as Verify.
 func Review(root, target, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	return runGenericTargetWorkflow(root, "review.md", target, agentOverride, chooser)
 }
 
-// SpecDiscover performs `gnomon spec discover`, wired directly to
-// workflows/specification-discovery.md — Core's own workflow identity and the sole authority for
-// this command's responsibility, prerequisites, and Result semantics; "spec discover" is only the
-// Human-facing CLI verb, never a second discovery model. It takes no target
-// (specification_reference: none) and creates or mutates nothing itself: the workflow's own text
-// is explicit that Discovery "does not modify an existing Specification" and "Create[s] nothing
-// yet — creation happens only after the Human decides." Accepting a proposed candidate is a
-// separate, subsequent Human action through the already-existing, unchanged `gnomon spec create
-// <title>` (SpecCreate, spec.go) — the same deterministic Draft Creation mechanism Discovery's
-// own "Draft Creation" section describes, not a second implementation of it.
+// SpecDiscover performs `gnomon spec discover`, wired to workflows/specification-discovery.md. It
+// takes no target and creates or mutates nothing itself — accepting a proposed candidate is a
+// separate, subsequent Human action through `gnomon spec create <title>` (SpecCreate, spec.go).
 func SpecDiscover(root, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	return runNoTargetWorkflow(root, "specification-discovery.md", agentOverride, chooser)
 }
 
-// SpecDefine performs `gnomon spec define <SPEC-id>`, wired directly to
-// workflows/specification-definition.md. Its target is a real Specification identity
-// (specification_reference: required) that must already exist — Definition never creates one;
-// facts.Eligible's existing existence-only check (requires_approved_specification: false, so
-// lifecycle is never gated here) refuses cleanly otherwise, before any Agent is resolved. The
-// Agent edits the existing Specification's own content directly, via the same ordinary
-// filesystem access every other Agent-invoking command already relies on — no CLI mediation, no
-// second content-validation step. A `READY_FOR_APPROVAL` result is exactly that: a workflow
-// result, rendered like any other by the generic engine — it never grants, implies, or performs
-// approval, which remains exclusively `gnomon approve`'s own, entirely separate act.
+// SpecDefine performs `gnomon spec define <SPEC-id>`, wired to
+// workflows/specification-definition.md. Its target must already exist (Definition never creates
+// one) but is not required to be Approved. A `READY_FOR_APPROVAL` result never grants approval —
+// that remains exclusively `gnomon approve`'s own act.
 func SpecDefine(root, specID, agentOverride string, chooser AgentChooser) (*present.Report, error) {
-	return runTargetedWorkflow(root, "specification-definition.md", targetSpec, specID, agentOverride, chooser)
+	return runTargetedWorkflow(root, "specification-definition.md", runRequest{kind: targetSpec, target: specID, agentOverride: agentOverride, chooser: chooser})
 }
 
-// Test performs `gnomon test [SPEC-id]`, wired directly to workflows/testing.md. Its Contract
-// declares specification_reference: optional with requires_approved_specification: true: when no
-// Specification is supplied, facts.Eligible's existing optional-reference branch is always
-// eligible (ad-hoc/exploratory testing, per the workflow's own When to Use); when one is
-// supplied, it must already exist and be Approved — the same hard gate Implementation uses,
-// applied identically here because the Contract, not command-specific Go code, declares it.
-// Testing is deliberately kept distinct from Verification: they are separate Contract files
-// invoked by separate commands, and nothing here invokes one from the other automatically.
+// Test performs `gnomon test [SPEC-id]`, wired to workflows/testing.md. With no Specification it
+// is always eligible (exploratory testing); with one, it must exist and be Approved.
 func Test(root, specID, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	return testWithHandoff(root, specID, ResolutionHandoff{}, agentOverride, chooser)
 }
 
-// testWithHandoff is Test's sibling for the interactive finding-resolution loop — the only
-// caller that ever supplies a non-empty ResolutionHandoff. Test's own eligibility (facts.Eligible
-// applied to testing.md's own specification_reference: optional / requires_approved_specification:
-// true) is unchanged: this reproduces runTargetedWorkflow's own prepare-then-eligibility-check
-// sequence exactly, just ending in runResolutionAgent instead of runWorkflow so a handoff can be
-// carried when one is supplied; Test is now a one-line delegator with a zero-value handoff, so
-// every existing caller and test is unaffected.
+// testWithHandoff is Test's sibling for the interactive finding-resolution loop, the only caller
+// that supplies a non-empty handoff.
 func testWithHandoff(root, specID string, handoff ResolutionHandoff, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	l, wf, workflowPath, err := prepareWorkflow(root, "testing.md")
 	if err != nil {
 		return nil, err
 	}
-	rep, _, err := runEligibleWorkflowFull(root, l, wf, workflowPath, targetSpec, specID, handoff, agentOverride, chooser)
+	rep, _, err := runEligible(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetSpec, target: specID, handoff: handoff, agentOverride: agentOverride, chooser: chooser})
 	return rep, err
 }
 
-// runNoTargetWorkflow and runGenericTargetWorkflow are two convenience shapes over
-// runTargetedWorkflow for the targetNone and targetGeneric cases (describe, bootstrap, finalize;
-// verify, review). SpecDefine and Test — whose target is a real Specification identity
-// (targetSpec), governed by facts.Eligible exactly as Implement's is — call runTargetedWorkflow
-// directly instead, with no separate convenience wrapper needed.
+// runNoTargetWorkflow and runGenericTargetWorkflow are convenience shapes over runTargetedWorkflow
+// for the targetNone and targetGeneric cases (describe/bootstrap/finalize; verify/review).
 func runNoTargetWorkflow(root, filename, agentOverride string, chooser AgentChooser) (*present.Report, error) {
-	return runTargetedWorkflow(root, filename, targetNone, "", agentOverride, chooser)
+	return runTargetedWorkflow(root, filename, runRequest{kind: targetNone, agentOverride: agentOverride, chooser: chooser})
 }
 
 func runGenericTargetWorkflow(root, filename, target, agentOverride string, chooser AgentChooser) (*present.Report, error) {
-	return runTargetedWorkflow(root, filename, targetGeneric, target, agentOverride, chooser)
+	return runTargetedWorkflow(root, filename, runRequest{kind: targetGeneric, target: target, agentOverride: agentOverride, chooser: chooser})
 }
 
-// runTargetedWorkflow loads the named workflow's Contract, checks its deterministic pre-start
-// eligibility via the one shared facts.Eligible (never inferring anything the Contract doesn't
-// itself state), and — only if eligible — hands off to the same runWorkflow Implement uses. It is
-// shared by every command in this slice, including SpecDefine and Test, whose target genuinely is
-// a Specification identity. The ineligibility Report here is deliberately generic (no
-// Specification-flavored "gnomon approve"/"gnomon spec create" suggestion, unlike Implement's own
-// tailored message above) — a single deterministic Contract-driven message serves every caller
-// uniformly, rather than special-casing wording per workflow; elig.Reason itself (e.g. "SPEC-003
-// does not exist", "SPEC-003 is not Approved") already states plainly what to do next.
-func runTargetedWorkflow(root, filename string, kind targetKind, target, agentOverride string, chooser AgentChooser) (*present.Report, error) {
+// runTargetedWorkflow loads the named workflow's Contract, then delegates to runEligible. req
+// carries only kind/target/agentOverride/chooser; root/l/wf/workflowPath are filled in here once
+// the named file is loaded.
+func runTargetedWorkflow(root, filename string, req runRequest) (*present.Report, error) {
 	l, wf, workflowPath, err := prepareWorkflow(root, filename)
 	if err != nil {
 		return nil, err
 	}
-	return runEligibleWorkflow(root, l, wf, workflowPath, kind, target, agentOverride, chooser)
-}
-
-// runEligibleWorkflow checks the ordinary deterministic pre-start eligibility for an
-// already-loaded workflow, and — only if eligible — hands off to runWorkflow. Shared by
-// runTargetedWorkflow (every dedicated command's filename-based dispatch) and Run
-// (identity-based dispatch, below), so both reduce to exactly the same eligibility-then-run
-// sequence — the concrete proof that a dedicated command and `gnomon run <identity>` addressing
-// the same workflow converge on identical execution semantics, not two parallel
-// implementations. The ineligibility Report here is deliberately generic (no
-// Specification-flavored "gnomon approve"/"gnomon spec create" suggestion, unlike Implement's own
-// tailored message) — a single deterministic Contract-driven message serves every caller
-// uniformly; elig.Reason itself (e.g. "SPEC-003 does not exist", "SPEC-003 is not Approved")
-// already states plainly what to do next.
-func runEligibleWorkflow(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target, agentOverride string, chooser AgentChooser) (*present.Report, error) {
-	rep, _, err := runEligibleWorkflowWithOutcome(root, l, wf, workflowPath, kind, target, agentOverride, chooser)
+	req.root, req.l, req.wf, req.workflowPath = root, l, wf, workflowPath
+	rep, _, err := runEligible(req)
 	return rep, err
 }
 
-// runEligibleWorkflowWithOutcome is runEligibleWorkflow's sibling for the one caller that also
-// needs the raw, validated Outcome once execution actually reaches obtainWorkflowOutcome —
-// RunEvaluation, which extracts Verification/Review's own findings from it for the interactive
-// resolution loop (cmd/gnomon). Kept as an addition, not a signature change to
-// runEligibleWorkflow, so every existing caller and test is unaffected; runEligibleWorkflow is
-// now a one-line delegator to this, so the eligibility logic itself still exists exactly once.
-func runEligibleWorkflowWithOutcome(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target, agentOverride string, chooser AgentChooser) (*present.Report, *result.Outcome, error) {
-	return runEligibleWorkflowFull(root, l, wf, workflowPath, kind, target, ResolutionHandoff{}, agentOverride, chooser)
-}
-
-// runEligibleWorkflowFull is runEligibleWorkflowWithOutcome's sibling for callers that also
-// supply a ResolutionHandoff (implementWithHandoff, testWithHandoff, knowledgeResolutionWithHandoff
-// — the interactive finding-resolution loop's own dispatch path). The eligibility logic itself
-// exists exactly once here; runEligibleWorkflowWithOutcome is now a one-line delegator with a
-// zero-value handoff, so every existing caller and test is unaffected.
-func runEligibleWorkflowFull(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, handoff ResolutionHandoff, agentOverride string, chooser AgentChooser) (*present.Report, *result.Outcome, error) {
-	elig, err := facts.Eligible(l, wf, target)
+// runEligible checks pre-start eligibility for an already-loaded workflow and, only if eligible,
+// calls execute. Its ineligibility Report is deliberately generic — unlike Implement's own
+// tailored message — since elig.Reason (e.g. "SPEC-003 is not Approved") already says what to do.
+func runEligible(req runRequest) (*present.Report, *result.Outcome, error) {
+	elig, err := facts.Eligible(req.l, req.wf, req.target)
 	if err != nil {
 		return nil, nil, err
 	}
 	if !elig.Eligible {
 		return &present.Report{
 			Outcome: present.Blocked,
-			Summary: fmt.Sprintf("%s blocked", humanizeIdentity(wf.Identity)),
-			Target:  target,
+			Summary: fmt.Sprintf("%s blocked", humanizeIdentity(req.wf.Identity)),
+			Target:  req.target,
 			Sections: []present.Section{
 				{Label: "Unresolved", Body: elig.Reason},
 			},
 		}, nil, fmt.Errorf("ineligible: %s", elig.Reason)
 	}
 
-	return runWorkflowFull(root, l, wf, workflowPath, kind, target, handoff, agentOverride, chooser)
+	return execute(req)
 }
 
 // Run performs `gnomon run <workflow-identity> [target]` — reaching any workflow by its own
-// declared Contract identity, built-in or custom, per cli/COMMAND_SURFACE.md's "run Rule":
-// Workflow Contract v1 does not distinguish built-in from custom at execution time, so no
-// artificial restriction is introduced here. Unlike every dedicated command, Run does not know
-// its target workflow's filename in advance — resolveWorkflowByIdentity finds it by scanning
-// every workflow file's own declared identity, exactly the routing cli/WORKFLOW_CONTRACT.md's
-// `identity` field exists for ("independent of the file's name or path"). targetKindFor derives
-// how to treat the supplied target purely from the resolved workflow's own
-// specification_reference — never a hardcoded per-workflow-name table — so a custom workflow
-// receives exactly the same target treatment a built-in one with the same
-// specification_reference value would. From there this reduces to the identical
-// runEligibleWorkflow → runWorkflow → runWorkflowWithAdapter chain every dedicated command uses.
+// declared Contract identity, built-in or custom (cli/COMMAND_SURFACE.md, "run Rule"). Unlike a
+// dedicated command, it resolves the target filename by identity (resolveWorkflowByIdentity) and
+// derives target treatment from the Contract (targetKindFor) rather than a per-workflow table.
 func Run(root, workflowIdentity, target, agentOverride string, chooser AgentChooser) (*present.Report, error) {
 	rep, _, err := RunEvaluation(root, workflowIdentity, target, agentOverride, chooser)
 	return rep, err
 }
 
-// RunEvaluation is Run's sibling for the one caller (cmd/gnomon's `gnomon run`) that also needs
-// Verification/Review's own actionable findings, extracted from the run's validated payload via
-// ActionableFindings, so it can offer the interactive resolution loop without this package
-// leaking Result Contract payload shape into cmd/gnomon. findings is always nil for every
-// workflow identity other than "verification"/"review", and for those two whenever the result
-// itself has nothing actionable (a clean PASS) — never treated as an error either way. Run is now
-// a one-line delegator to this, so every other identity's behavior through `gnomon run` is
-// byte-for-byte unchanged.
+// RunEvaluation is Run's sibling, additionally returning Verification/Review's own actionable
+// findings (extracted via ActionableFindings) for the interactive resolution loop. findings is
+// nil for every other identity, and for a clean PASS — never treated as an error either way.
 func RunEvaluation(root, workflowIdentity, target, agentOverride string, chooser AgentChooser) (*present.Report, []EvaluationFinding, error) {
 	l, err := project.Locate(root)
 	if err != nil {
@@ -340,22 +232,15 @@ func RunEvaluation(root, workflowIdentity, target, agentOverride string, chooser
 		return nil, nil, err
 	}
 
-	rep, outcome, err := runEligibleWorkflowWithOutcome(root, l, wf, workflowPath, targetKindFor(wf), target, agentOverride, chooser)
+	rep, outcome, err := runEligible(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetKindFor(wf), target: target, agentOverride: agentOverride, chooser: chooser})
 	if outcome == nil {
 		return rep, nil, err
 	}
 	return rep, ActionableFindings(wf.Identity, outcome.Payload), err
 }
 
-// targetKindFor derives how Run should treat a workflow's target purely from its own Contract:
-// specification_reference: none means no CLI-checked Specification concept applies to this
-// workflow — cli/WORKFLOW_CONTRACT.md's own words — so any supplied target is treated as
-// free-form/untyped, never existence/lifecycle-checked and never described to the Agent as a
-// Specification; required or optional means the target genuinely is a Specification identity,
-// gated by facts.Eligible exactly as implement's is. This is the one piece of Contract metadata
-// the existing design already ties directly to this distinction; Run never hardcodes a
-// per-workflow-name table to reconstruct it, and this produces byte-identical treatment to every
-// existing dedicated command for every input that command could ever have received.
+// targetKindFor derives how Run should treat a workflow's target purely from its own Contract's
+// specification_reference — never a hardcoded per-workflow-name table.
 func targetKindFor(wf contract.Workflow) targetKind {
 	if wf.SpecificationReference == contract.SpecReferenceNone {
 		return targetGeneric
@@ -363,15 +248,9 @@ func targetKindFor(wf contract.Workflow) targetKind {
 	return targetSpec
 }
 
-// resolveWorkflowByIdentity scans every workflow file in the project's .gnomon/workflows/
-// directory for the one whose own declared Contract identity matches — Run's own resolution
-// mechanism, since, unlike every dedicated command, it does not know its target filename in
-// advance. A file that fails to load (malformed or absent Contract metadata) is excluded from
-// the scan, exactly as cli/WORKFLOW_CONTRACT.md's own validation table treats a file with no
-// readable contract metadata as "safe to ignore for discovery purposes" — such a file cannot
-// match any identity in the first place. More than one file declaring the same identity is
-// refused outright, per that same table's "Duplicate identity across two files... the CLI
-// refuses to route to either until resolved."
+// resolveWorkflowByIdentity scans every workflow file for the one whose declared Contract
+// identity matches. A file that fails to load is silently excluded (cli/WORKFLOW_CONTRACT.md).
+// More than one file declaring the same identity is refused outright.
 func resolveWorkflowByIdentity(l project.Layout, identity string) (contract.Workflow, string, error) {
 	entries, err := os.ReadDir(l.WorkflowsDir())
 	if err != nil {
@@ -407,8 +286,7 @@ func resolveWorkflowByIdentity(l project.Layout, identity string) (contract.Work
 }
 
 // prepareImplementation is a thin, Implementation-specific convenience over prepareWorkflow and
-// facts.Eligible — kept exactly as Slice 0/1 left it, both in signature and behavior, so every
-// test written against that shape continues to work unchanged.
+// facts.Eligible.
 func prepareImplementation(root, specID string) (project.Layout, contract.Workflow, facts.Eligibility, error) {
 	l, wf, _, err := prepareWorkflow(root, "implementation.md")
 	if err != nil {
@@ -421,13 +299,9 @@ func prepareImplementation(root, specID string) (project.Layout, contract.Workfl
 	return l, wf, elig, nil
 }
 
-// prepareWorkflow resolves everything every workflow-invoking command needs before deciding
-// whether to touch an Agent provider or check eligibility at all: project location and
-// contract-version compatibility, then the named workflow's own Contract — plus the exact path
-// that Contract was loaded from, since cli/WORKFLOW_CONTRACT.md's own `identity` field is
-// "independent of the file's name or path": nothing downstream may assume a workflow's path can
-// be reconstructed from its identity (true for all 10 built-in files today, not guaranteed for a
-// custom one Run might resolve by identity alone). Shared by every workflow-invoking command.
+// prepareWorkflow resolves project location, contract-version compatibility, and the named
+// workflow's own Contract, plus the exact path it was loaded from — a workflow's path can never be
+// reconstructed from its identity alone (cli/WORKFLOW_CONTRACT.md). Shared by every caller.
 func prepareWorkflow(root, filename string) (project.Layout, contract.Workflow, string, error) {
 	l, err := project.Locate(root)
 	if err != nil {
@@ -450,143 +324,169 @@ func prepareWorkflow(root, filename string) (project.Layout, contract.Workflow, 
 	return l, wf, workflowPath, nil
 }
 
-// implementWithAdapter is a thin, Implementation-specific convenience over
-// runWorkflowWithAdapter, kept exactly as Slice 0/1 left it — both in signature and behavior — so
-// every test exercising it directly against a fake Adapter continues to work unchanged. Its own
-// workflowPath is safe to fix as "implementation.md" here precisely because this function is
-// itself hardcoded to Implementation, not a generic dispatcher.
+// implementWithAdapter is a thin, Implementation-specific convenience over execute, used directly
+// by tests against a fake Adapter. Its workflowPath is fixed since it is hardcoded to
+// Implementation, not a generic dispatcher.
 func implementWithAdapter(root string, l project.Layout, wf contract.Workflow, specID string, ad adapter.Adapter) (*present.Report, error) {
 	workflowPath := filepath.Join(l.WorkflowsDir(), "implementation.md")
-	return runWorkflowWithAdapter(root, l, wf, workflowPath, targetSpec, specID, ad)
-}
-
-// runWorkflow resolves the Agent provider — the one function every Agent-invoking command in
-// this slice, plus Implement, goes through; orchestration never constructs a ClaudeAdapter or
-// CodexAdapter directly — and, once resolved, hands off to runWorkflowWithAdapter for the shared
-// prepare/run/consume/classify/render lifecycle every one of these commands shares.
-func runWorkflow(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target, agentOverride string, chooser AgentChooser) (*present.Report, error) {
-	rep, _, err := runWorkflowWithOutcome(root, l, wf, workflowPath, kind, target, agentOverride, chooser)
+	rep, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetSpec, target: specID, adapter: ad})
 	return rep, err
 }
 
-// runWorkflowWithOutcome is runWorkflow's sibling for RunEvaluation, the one caller that also
-// needs the raw Outcome once an Agent is actually resolved and run. runWorkflow is now a
-// one-line delegator to this, so the Agent-resolution logic itself still exists exactly once.
-func runWorkflowWithOutcome(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target, agentOverride string, chooser AgentChooser) (*present.Report, *result.Outcome, error) {
-	return runWorkflowFull(root, l, wf, workflowPath, kind, target, ResolutionHandoff{}, agentOverride, chooser)
-}
-
-// runWorkflowFull is runWorkflowWithOutcome's sibling for callers that also supply a
-// ResolutionHandoff. The Agent-resolution logic itself exists exactly once here;
-// runWorkflowWithOutcome is now a one-line delegator with a zero-value handoff, so every existing
-// caller and test is unaffected.
-func runWorkflowFull(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, handoff ResolutionHandoff, agentOverride string, chooser AgentChooser) (*present.Report, *result.Outcome, error) {
-	ad, err := ResolveAgent(agentOverride, chooser)
-	if err != nil {
-		return &present.Report{
-			Outcome: present.Failed,
-			Summary: "Could not determine which Agent to use",
-			Target:  target,
-			Sections: []present.Section{
-				{Label: "Reason", Body: err.Error()},
-			},
-			Next: "Pass --agent claude|codex, or run `gnomon agent set-default <claude|codex>`.",
-		}, nil, err
+// execute is the one run path every Agent-invoking command shares: resolve the Agent (unless
+// req.adapter is already given), invoke, validate the result, classify, render. It never checks
+// eligibility itself — that's runEligible's job — so callers that already checked it their own way
+// (Implement's tailored message) call this directly.
+//
+// It also carries Rule B: any Specification that derived Approved before the run and no longer
+// does afterward is reported as a warning on the Report — never restored, never a reason to
+// reject. Wrapped here rather than in obtainOutcome because it needs to annotate the final Report.
+func execute(req runRequest) (rep *present.Report, outcome *result.Outcome, err error) {
+	ad := req.adapter
+	if ad == nil {
+		ad, err = ResolveAgent(req.agentOverride, req.chooser)
+		if err != nil {
+			return &present.Report{
+				Outcome: present.Failed,
+				Summary: "Could not determine which Agent to use",
+				Target:  req.target,
+				Sections: []present.Section{
+					{Label: "Reason", Body: err.Error()},
+				},
+				Next: "Pass --agent claude|codex, or run `gnomon agent set-default <claude|codex>`.",
+			}, nil, err
+		}
+		req.adapter = ad
 	}
 
-	return runWorkflowWithAdapterFull(root, l, wf, workflowPath, kind, target, handoff, ad)
-}
+	approvedBefore, snapErr := approvedIdentities(req.l)
+	if snapErr != nil {
+		return nil, nil, snapErr
+	}
+	defer func() {
+		if rep == nil {
+			return
+		}
+		lost, lostErr := lostApprovals(req.l, approvedBefore, governingSpecIdentity(req.wf, req.kind, req.target))
+		if lostErr != nil || len(lost) == 0 {
+			return
+		}
+		rep.Sections = append(rep.Sections, lostApprovalSection(lost))
+	}()
 
-// runResolutionAgent is runWorkflowFull's 2-return-value convenience for resolution dispatch
-// (implementWithHandoff, testWithHandoff), which never needs the raw Outcome the way
-// RunEvaluation does — a resolution workflow's own result is rendered and shown, never mined for
-// findings.
-func runResolutionAgent(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, handoff ResolutionHandoff, agentOverride string, chooser AgentChooser) (*present.Report, error) {
-	rep, _, err := runWorkflowFull(root, l, wf, workflowPath, kind, target, handoff, agentOverride, chooser)
-	return rep, err
-}
-
-// runWorkflowWithAdapter is the generic execution lifecycle every Agent-invoking command in this
-// slice shares — load Contract → (eligibility, checked by the caller) → resolve Agent → invoke →
-// receive the transient Result Protocol payload → validate against the Result Contract → extract
-// the terminal value → classify using the Contract → render generically. Kept separate from
-// runWorkflow, and unexported, so this lifecycle remains directly testable against a fake
-// Adapter, without a real provider resolution in the way — the same reason implementWithAdapter
-// was split out in Slice 1. Nothing here ever switches on a workflow's identity or its result
-// vocabulary; every workflow-specific fact comes from the already-loaded Contract (wf.Result),
-// and workflowPath is always the caller's own already-resolved path — never reconstructed from
-// wf.Identity here.
-func runWorkflowWithAdapter(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, ad adapter.Adapter) (*present.Report, error) {
-	rep, _, err := runWorkflowWithAdapterAndOutcome(root, l, wf, workflowPath, kind, target, ad)
-	return rep, err
-}
-
-// runWorkflowWithAdapterAndOutcome is runWorkflowWithAdapter's sibling, additionally returning
-// the raw validated Outcome — needed only by RunEvaluation (via runWorkflowWithOutcome), which
-// reads Verification/Review's own findings from its payload. runWorkflowWithAdapter is now a
-// one-line delegator to this, so the classify/render lifecycle itself still exists exactly once,
-// and every existing test calling runWorkflowWithAdapter directly against a fake Adapter is
-// unaffected.
-func runWorkflowWithAdapterAndOutcome(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, ad adapter.Adapter) (*present.Report, *result.Outcome, error) {
-	return runWorkflowWithAdapterFull(root, l, wf, workflowPath, kind, target, ResolutionHandoff{}, ad)
-}
-
-// runWorkflowWithAdapterFull is runWorkflowWithAdapterAndOutcome's sibling for callers that also
-// supply a ResolutionHandoff — the classify/render lifecycle exists exactly once here;
-// runWorkflowWithAdapterAndOutcome is now a one-line delegator with a zero-value handoff, so
-// every existing test calling it (or runWorkflowWithAdapter) directly against a fake Adapter is
-// unaffected.
-func runWorkflowWithAdapterFull(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, handoff ResolutionHandoff, ad adapter.Adapter) (*present.Report, *result.Outcome, error) {
-	outcome, detail, failureRep, err := obtainWorkflowOutcomeFull(root, l, wf, workflowPath, kind, target, handoff, ad)
+	var detail []string
+	var failureRep *present.Report
+	outcome, detail, failureRep, err = obtainOutcome(req)
 	if failureRep != nil {
-		return failureRep, nil, err
+		rep, outcome = failureRep, nil
+		return
 	}
-	rep, err := classifyAndRender(wf, target, detail, outcome)
-	return rep, outcome, err
+	rep, err = classifyAndRender(req.wf, req.target, detail, outcome)
+	return
 }
 
-// obtainWorkflowOutcome runs the Agent and returns its raw, Contract-validated but not yet
-// classified/rendered result — the part of runWorkflowWithAdapter's sequence every caller shares
-// (launch, poll, consume). A non-nil failureRep means the run never produced a valid result at
-// all (process failure, cancellation, or protocol error): callers must return it as-is rather
-// than attempting to classify anything. This split exists so a caller needing the raw payload
-// before generic rendering (Discovery's interactive accept flow) can reuse this exact sequence
-// instead of duplicating it.
-func obtainWorkflowOutcome(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, ad adapter.Adapter) (*result.Outcome, []string, *present.Report, error) {
-	return obtainWorkflowOutcomeFull(root, l, wf, workflowPath, kind, target, ResolutionHandoff{}, ad)
+// governingSpecIdentity returns the identity Rule A protects, or "" if it doesn't apply: the
+// Contract must require an Approved Specification, and one must actually be supplied.
+func governingSpecIdentity(wf contract.Workflow, kind targetKind, target string) string {
+	if wf.RequiresApprovedSpecification && kind == targetSpec && target != "" {
+		return target
+	}
+	return ""
 }
 
-// obtainWorkflowOutcomeFull is obtainWorkflowOutcome's sibling for resolution dispatch — the one
-// place adapter.Context is actually constructed, and the only place a non-empty
-// ResolutionHandoff ever becomes Context.Handoff. obtainWorkflowOutcome is now a one-line
-// delegator with a zero-value handoff (adapterHandoff() returns nil for it), so every existing
-// caller and test is unaffected.
-func obtainWorkflowOutcomeFull(root string, l project.Layout, wf contract.Workflow, workflowPath string, kind targetKind, target string, handoff ResolutionHandoff, ad adapter.Adapter) (*result.Outcome, []string, *present.Report, error) {
+// obtainOutcome runs the Agent (req.adapter must already be set) and returns its raw,
+// Contract-validated but not yet classified/rendered result. A non-nil failureRep means the run
+// never produced a valid result at all; callers must return it as-is. Discovery's interactive
+// accept flow calls this directly, skipping execute's classify/render and Rule B.
+//
+// This wraps the run guard: approval evidence, and (Rule A) the governing Specification's file,
+// are snapshotted before the run and compared after; either difference rejects the run outright
+// (runguard.go). A run lock excludes gnomon approve/revoke for the run's duration.
+func obtainOutcome(req runRequest) (outcome *result.Outcome, detail []string, failureRep *present.Report, err error) {
+	approvalsDir := req.l.ApprovalsDir()
+	before, err := snapshotTree(approvalsDir)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	var specBefore *specSnapshot
+	if identity := governingSpecIdentity(req.wf, req.kind, req.target); identity != "" {
+		specBefore, err = snapshotGoverningSpec(req.l.SpecificationsDir(), identity)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
 	runID, err := result.NewRunID()
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	destPath, err := result.Destination(root, runID)
+	unlock, err := acquireRunLock(req.root, runID, req.wf.Identity)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer unlock()
+	defer func() {
+		// Runs on every path, including an otherwise-successful result, since that result is
+		// still rejected if the Agent touched approval evidence or the governing Specification.
+		after, snapErr := snapshotTree(approvalsDir)
+		if snapErr != nil {
+			outcome, detail, failureRep, err = nil, nil, approvalCheckFailedReport(snapErr), snapErr
+			return
+		}
+		aResult := approvalsResult{Dir: approvalsDir, Diff: diffSnapshots(before, after)}
+
+		var sResult specResult
+		if specBefore != nil {
+			viol, checkErr := checkGoverningSpec(req.l.SpecificationsDir(), specBefore)
+			if checkErr != nil {
+				outcome, detail, failureRep, err = nil, nil, specCheckFailedReport(specBefore.Identity, checkErr), checkErr
+				return
+			}
+			sResult = specResult{Before: specBefore, Violation: viol}
+		}
+
+		if !aResult.violated() && !sResult.violated() {
+			return
+		}
+
+		if aResult.violated() {
+			aResult.RestoreFailed, aResult.RestoreErr = restoreSnapshot(before, aResult.Diff)
+		}
+		if sResult.violated() {
+			sResult.Preserved, sResult.RestoreFailed, sResult.RestoreErr = preserveAndRestoreGoverningSpec(req.root, runID, specBefore)
+		}
+
+		failureRep = buildRejectionReport(aResult, sResult)
+		outcome, detail = nil, nil
+		err = fmt.Errorf("workflow run rejected: the agent tampered with approval evidence or the governing specification")
+	}()
+
+	return obtainOutcomeUnguarded(req, runID)
+}
+
+// obtainOutcomeUnguarded is obtainOutcome's unwrapped body, split out so the run guard wraps it via
+// a plain call. runID is generated by the caller so the run lock and the Result Protocol
+// destination agree on the same run.
+func obtainOutcomeUnguarded(req runRequest, runID string) (*result.Outcome, []string, *present.Report, error) {
+	destPath, err := result.Destination(req.root, runID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// Captured by the polling closure the instant a valid result is detected, while the Agent may
-	// still be running — this is what lets Gnomon terminate the session itself rather than
-	// requiring the Agent to end it. result.Consume both validates and deletes the transient file
-	// on success, so it is safe to call repeatedly from the closure: every call before the real
-	// one simply fails (not yet written, still being written, or not yet matching) and is treated
-	// as "not ready", never as an error worth reporting.
+	// Captured by the polling closure the instant a valid result is detected, so Gnomon can end the
+	// session itself. Safe to call repeatedly: a call before the real result exists just fails, and
+	// is treated as "not ready" rather than an error.
 	var polled *result.Outcome
 	ctx := adapter.Context{
-		ProjectRoot:      root,
-		GnomonRoot:       l.GnomonRoot(),
-		WorkflowPath:     workflowPath,
-		WorkflowIdentity: wf.Identity,
+		ProjectRoot:      req.root,
+		GnomonRoot:       req.l.GnomonRoot(),
+		WorkflowPath:     req.workflowPath,
+		WorkflowIdentity: req.wf.Identity,
 		ResultPath:       destPath,
 		RunID:            runID,
 		PollResult: func() (bool, error) {
-			outcome, err := result.Consume(destPath, wf.Identity, runID, wf.Result)
+			outcome, err := result.Consume(destPath, req.wf.Identity, runID, req.wf.Result)
 			if err != nil {
 				return false, nil
 			}
@@ -594,19 +494,19 @@ func obtainWorkflowOutcomeFull(root string, l project.Layout, wf contract.Workfl
 			return true, nil
 		},
 	}
-	switch kind {
+	switch req.kind {
 	case targetSpec:
-		ctx.SpecIdentity = target
+		ctx.SpecIdentity = req.target
 	case targetGeneric:
-		ctx.Target = target
+		ctx.Target = req.target
 	}
-	ctx.Handoff = handoff.adapterHandoff()
+	ctx.Handoff = req.handoff.adapterHandoff()
 
-	if err := ad.Prepare(ctx); err != nil {
+	if err := req.adapter.Prepare(ctx); err != nil {
 		return nil, nil, nil, err
 	}
-	_ = ad.Run()
-	status := ad.Status()
+	_ = req.adapter.Run()
+	status := req.adapter.Status()
 
 	detail := []string{
 		fmt.Sprintf("process: %s", processLabel(status)),
@@ -616,10 +516,8 @@ func obtainWorkflowOutcomeFull(root string, l project.Layout, wf contract.Workfl
 	outcome := polled
 	var consumeErr error
 	if outcome == nil {
-		// The polling loop never caught a valid result before the process ended — one final,
-		// authoritative check in case one appeared in the narrow window right at the end, exactly
-		// as a run with no polling at all would have done.
-		o, cErr := result.Consume(destPath, wf.Identity, runID, wf.Result)
+		// Polling never caught a valid result — one final check for the narrow window right at the end.
+		o, cErr := result.Consume(destPath, req.wf.Identity, runID, req.wf.Result)
 		if cErr != nil {
 			consumeErr = cErr
 		} else {
@@ -628,8 +526,8 @@ func obtainWorkflowOutcomeFull(root string, l project.Layout, wf contract.Workfl
 	}
 
 	if consumeErr != nil {
-		label := humanizeIdentity(wf.Identity)
-		rep := &present.Report{Target: target, Detail: detail}
+		label := humanizeIdentity(req.wf.Identity)
+		rep := &present.Report{Target: req.target, Detail: detail}
 		switch {
 		case status.Terminated:
 			rep.Outcome = present.Cancelled
@@ -649,16 +547,12 @@ func obtainWorkflowOutcomeFull(root string, l project.Layout, wf contract.Workfl
 	return outcome, detail, nil, nil
 }
 
-// classifyAndRender is the generic classify-then-render half of runWorkflowWithAdapter's
-// sequence, driven entirely by the workflow's own already-loaded Contract — never a hardcoded
-// switch over a specific workflow's terminal vocabulary. wf.Validate() (run inside contract.Load,
-// always before a workflow can be invoked at all) already guarantees every value the schema's
-// enum permits has an explicit "success"/"blocked" classification, so a schema-conformant payload
-// reaching here with an unclassified terminal value is expected to be unreachable — handled
-// defensively below as a failure, never silently treated as success. This is also exactly what
-// keeps a workflow's own valid negative conclusion (Verification FAIL, Review DEFECT/RISK/
-// KNOWLEDGE GAP) from ever being reported as a process/protocol failure: those values reach here
-// as a normally-classified "blocked" outcome, never through obtainWorkflowOutcome's failure path.
+// classifyAndRender classifies and renders a run's outcome, driven entirely by the workflow's own
+// Contract — never a hardcoded switch over a specific workflow's terminal vocabulary. An
+// unclassified terminal value should be unreachable (wf.Validate() guarantees the schema's enum is
+// fully classified) but is handled defensively as a failure rather than silently treated as
+// success. A workflow's own valid negative conclusion (Verification FAIL, Review DEFECT/RISK/
+// KNOWLEDGE GAP) is classified "blocked" here, never routed through obtainOutcome's failure path.
 func classifyAndRender(wf contract.Workflow, target string, detail []string, outcome *result.Outcome) (*present.Report, error) {
 	rep := &present.Report{Target: target, Detail: detail}
 
@@ -684,10 +578,8 @@ func classifyAndRender(wf contract.Workflow, target string, detail []string, out
 	return rep, nil
 }
 
-// processLabel is the single, reusable classification of what happened to the Agent process,
-// used both in verbose diagnostics and in failure-path summaries — so the same fact is always
-// described the same way, and a Gnomon-initiated termination after success is never worded as if
-// it were an Agent failure.
+// processLabel describes what happened to the Agent process, so a Gnomon-initiated termination
+// after success is never worded as if it were an Agent failure.
 func processLabel(status adapter.Status) string {
 	switch {
 	case status.Err != nil:
@@ -710,12 +602,8 @@ func humanizeProtocolError(err error) string {
 	return strings.TrimPrefix(err.Error(), "protocol failure: ")
 }
 
-// humanizeIdentity turns a workflow's own hyphenated identity into a natural sentence-leading
-// label — e.g. "git-finalization" -> "Git finalization", "implementation" -> "Implementation" —
-// the same mechanical, no-hardcoded-name transform humanizeTerminalValue (render.go) already
-// applies to terminal values, applied here to the one other place a workflow's own name needs to
-// appear in Human-facing text (process-outcome summaries), without ever naming a specific
-// workflow in Go code.
+// humanizeIdentity turns a hyphenated workflow identity into a sentence-leading label, e.g.
+// "git-finalization" -> "Git finalization".
 func humanizeIdentity(identity string) string {
 	words := strings.Split(identity, "-")
 	for i, w := range words {

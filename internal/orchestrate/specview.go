@@ -2,6 +2,7 @@ package orchestrate
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"gnomon/internal/approval"
@@ -11,18 +12,13 @@ import (
 	"gnomon/internal/specs"
 )
 
-// SpecAction is one deterministically-derived lifecycle action for a Specification — available
-// or not, with a reason in the latter case. This is the one place action availability is
-// computed; every caller (gnomon next, the Specification workspace) reads from it rather than
-// re-deriving lifecycle rules of its own.
+// SpecAction is one deterministically-derived lifecycle action for a Specification — available or
+// not, with a reason if not. The one place action availability is computed; every caller (gnomon
+// next, the workspace) reads from it rather than re-deriving lifecycle rules of its own.
 //
-// Only define/approve/implement/test/revoke ever appear here. Verification and Review are
-// deliberately excluded: their Contracts declare specification_reference: none — Core's own
-// statement that their target "is not necessarily a Specification at all" — so unlike
-// Definition/Implementation/Testing, no Contract establishes any relationship between them and a
-// particular Specification's lifecycle. Listing them here would assert a Specification-scoped
-// meaning the authoritative model does not define; they remain reachable, generically, only via
-// `gnomon run verification|review <target>`.
+// Only define/approve/implement/test/revoke appear here. Verification and Review are excluded:
+// their Contracts declare specification_reference: none, so no Contract ties them to a
+// Specification's lifecycle — they remain reachable only via `gnomon run verification|review <target>`.
 type SpecAction struct {
 	Verb      string // "define", "approve", "implement", "test", "revoke"
 	Command   string
@@ -30,23 +26,14 @@ type SpecAction struct {
 	Reason    string
 }
 
-// SpecActions returns every lifecycle action's current availability for one existing
-// Specification, composed entirely from facts.Eligible/facts.Lifecycle against the real
-// Contract files — never a hardcoded rule of its own. define/implement/test come from the
-// Specification-governed workflow Contracts, by their own declared identity (never a hardcoded
-// "spec define" style guess); approve/revoke come from facts.Lifecycle's own Draft/Approved
-// derivation (the same operations Approve/Revoke themselves gate on).
+// SpecActions returns every lifecycle action's current availability, composed entirely from
+// facts.Eligible/facts.Lifecycle against the real Contract files — never a hardcoded rule of its
+// own. define/implement/test use `gnomon run <identity> <id>` (no dedicated top-level command);
+// approve/revoke keep their own command names, since they are Human-exclusive CLI-native
+// operations with no Workflow Contract at all.
 //
-// Command names gnomon run <identity> <id> for define/implement/test: these three have no
-// dedicated top-level command (cli/COMMAND_SURFACE.md's public surface centers on gnomon spec /
-// gnomon spec <SPEC-id>, which call the same underlying Core operations directly; run is the
-// documented non-interactive path for the same operation). approve/revoke keep their own
-// dedicated command names, since they are deterministic, Human-exclusive CLI-native operations
-// with no Workflow Contract at all — run has nothing to invoke for them.
-//
-// The second return value lists any of the three Contract files that failed to load — the
-// actions they would have gated are simply absent from the first return value, matching
-// resolveWorkflowByIdentity's own "unreadable Contract is excluded, not fatal" treatment.
+// The second return value lists any Contract file that failed to load — its action is simply
+// absent from the first return value, not a fatal error.
 func SpecActions(l project.Layout, id string) ([]SpecAction, []string, error) {
 	lifecycle, err := facts.Lifecycle(l, id)
 	if err != nil {
@@ -104,17 +91,15 @@ func SpecActions(l project.Layout, id string) ([]SpecAction, []string, error) {
 	return actions, unreadable, nil
 }
 
-// SpecSummary is one Specification's browser-list row: identity, display title, and lifecycle —
-// the minimum needed to list and filter Specifications without opening each one's full workspace.
+// SpecSummary is one Specification's browser-list row: identity, display title, and lifecycle.
 type SpecSummary struct {
 	ID        string
 	Title     string
 	Lifecycle approval.Lifecycle
 }
 
-// ListSpecs returns every existing Specification's browser-row summary, in identity order —
-// the same complete, unranked enumeration facts.Lifecycle-consuming callers throughout this
-// package already use (Next, Status); never a "current Specification" selection.
+// ListSpecs returns every existing Specification's browser-row summary, in identity order — never
+// a "current Specification" selection.
 func ListSpecs(l project.Layout) ([]SpecSummary, error) {
 	ids, err := specs.List(l.SpecificationsDir())
 	if err != nil {
@@ -139,22 +124,20 @@ func ListSpecs(l project.Layout) ([]SpecSummary, error) {
 	return summaries, nil
 }
 
-// SpecDetail is the full derived state the Specification workspace displays for one
-// Specification: current identity/title/lifecycle/fingerprint, the active grant when Approved,
-// every action's current availability, and the durable revision history. Everything here is
-// derived fresh from authoritative artifacts on each call — nothing is cached or remembered
-// across invocations.
+// SpecDetail is the full derived state the Specification workspace displays. Everything here is
+// derived fresh from authoritative artifacts on each call — nothing is cached.
 type SpecDetail struct {
-	ID          string
-	Title       string
-	Path        string
-	Content     string
-	Fingerprint string
-	Lifecycle   approval.Lifecycle
-	ActiveGrant *approval.Revision // the revision currently causing Approved, if any
-	Actions     []SpecAction
-	Unreadable  []string
-	Revisions   []approval.Revision // oldest first
+	ID           string
+	Title        string
+	Path         string
+	Content      string
+	Fingerprint  string
+	Lifecycle    approval.Lifecycle
+	ActiveGrant  *approval.Revision // the revision currently causing Approved, if any
+	Actions      []SpecAction
+	Unreadable   []string
+	Revisions    []approval.Revision // oldest first
+	Placeholders []string            // remaining template placeholders (see specs.RemainingPlaceholders); nil if none or the template is missing/unreadable
 }
 
 // ListSpecsForRoot locates the project at root and returns ListSpecs's result — the entry point
@@ -215,16 +198,14 @@ func SpecDetailFor(l project.Layout, id string) (*SpecDetail, error) {
 		Unreadable:  unreadable,
 		Revisions:   revisions,
 	}
+	if template, tmplErr := os.ReadFile(filepath.Join(l.SpecificationsDir(), "SPEC-000-use-case-name.md")); tmplErr == nil {
+		detail.Placeholders = specs.RemainingPlaceholders(template, content)
+	}
 	if lifecycle == approval.Approved {
-		// revisions is oldest-first; the latest non-revoked match is the one actually causing
-		// Approved (matching approval.activeGrant's own rule, applied here for display).
-		for i := len(revisions) - 1; i >= 0; i-- {
-			if revisions[i].Fingerprint == fingerprint && !revisions[i].Revoked {
-				r := revisions[i]
-				detail.ActiveGrant = &r
-				break
-			}
-		}
+		// revisions is oldest-first, from the same ordering approval.ActiveGrant uses — so its
+		// last element is always L whenever Lifecycle above says Approved.
+		r := revisions[len(revisions)-1]
+		detail.ActiveGrant = &r
 	}
 	return detail, nil
 }

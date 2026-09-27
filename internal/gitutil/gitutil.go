@@ -34,22 +34,17 @@ func Identity(root string) (string, error) {
 	return fmt.Sprintf("%s <%s>", name, email), nil
 }
 
-// Status is what Git-related guidance can derive: whether root is inside a Git repository at
-// all, and — only when it is — whether the working tree has uncommitted changes. A project that
-// is simply not a Git repository is a legitimate state (Gnomon's own init never requires Git);
-// Changed is meaningless when Available is false.
+// Status is what Git-related guidance can derive: whether root is inside a Git repository, and —
+// only when it is — whether the working tree has uncommitted changes. Changed is meaningless when
+// Available is false.
 type Status struct {
 	Available bool
 	Changed   bool
 }
 
-// Inspect derives Status for root. "Not a Git repository" is Git's own well-defined,
-// deterministic diagnosis (checked with `git rev-parse --git-dir` before any working-tree
-// command runs) and is reported as Status{}, nil — never an error, since Git is a capability
-// Git-related guidance uses, not a prerequisite for inspecting root at all. Any other Git failure
-// (git missing, permission denied, a corrupted repository) is genuinely unexpected and is
-// returned as an error with Git's own stderr preserved, rather than being reduced to a bare exit
-// code or silently mistaken for "no repository here".
+// Inspect derives Status for root. "Not a Git repository" is reported as Status{}, nil — never an
+// error. Any other Git failure (missing binary, permission denied, corrupted repository) is
+// genuinely unexpected and returned as an error with Git's own stderr preserved.
 func Inspect(root string) (Status, error) {
 	available, err := isRepository(root)
 	if err != nil {
@@ -66,10 +61,8 @@ func Inspect(root string) (Status, error) {
 }
 
 // isRepository reports whether root is inside a Git repository, using Git's own canonical check
-// (`rev-parse --git-dir`) rather than inferring repository absence from some later command's
-// failure. Git's standard "not a git repository" diagnosis on stderr is the expected, non-error
-// absence case; any other failure (git not installed, a corrupted repository, permission denied)
-// is returned as an error so it is never silently mistaken for "no repository here".
+// (`rev-parse --git-dir`). Git's "not a git repository" stderr is the expected, non-error absence
+// case; any other failure is returned as an error, never mistaken for "no repository here".
 func isRepository(root string) (bool, error) {
 	cmd := exec.Command("git", "rev-parse", "--git-dir")
 	cmd.Dir = root
@@ -84,10 +77,8 @@ func isRepository(root string) (bool, error) {
 	return true, nil
 }
 
-// hasChanges reports the one plain boolean cli/DERIVED_FACTS.md defines for the working tree:
-// any staged, unstaged, or untracked difference from HEAD — no further breakdown. Per that
-// document, this is deliberately coarse; a caller must never infer semantic finalize-readiness
-// from it. Called only once root is already confirmed to be a Git repository.
+// hasChanges reports the one plain boolean cli/DERIVED_FACTS.md defines: any staged, unstaged, or
+// untracked difference from HEAD — deliberately coarse; never infer finalize-readiness from it.
 func hasChanges(root string) (bool, error) {
 	cmd := exec.Command("git", "status", "--porcelain")
 	cmd.Dir = root

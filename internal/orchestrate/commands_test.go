@@ -33,7 +33,7 @@ func TestDescribe_MapsToInitialKnowledgeEstablishment(t *testing.T) {
 		FakeAdapter: &adapter.FakeAdapter{},
 		Payload:     map[string]interface{}{"outcome": "READY_FOR_BOOTSTRAP", "recorded_knowledge": "PROJECT.md updated"},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetNone, "", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetNone, target: "", adapter: scripted})
 	if err != nil {
 		t.Fatalf("describe: %v (report: %+v)", err, report)
 	}
@@ -136,7 +136,7 @@ func TestDescribe_SuccessfulResult_RecommendsBootstrap(t *testing.T) {
 		FakeAdapter: &adapter.FakeAdapter{},
 		Payload:     map[string]interface{}{"outcome": "READY_FOR_BOOTSTRAP", "recorded_knowledge": "PROJECT.md updated"},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetNone, "", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetNone, target: "", adapter: scripted})
 	if err != nil {
 		t.Fatalf("describe: %v (report: %+v)", err, report)
 	}
@@ -160,7 +160,7 @@ func TestBootstrap_SuccessfulResult_RecommendsSpecWork(t *testing.T) {
 		FakeAdapter: &adapter.FakeAdapter{},
 		Payload:     map[string]interface{}{"outcome": "BOOTSTRAP_COMPLETE", "baseline_established": "scaffolded"},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetNone, "", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetNone, target: "", adapter: scripted})
 	if err != nil {
 		t.Fatalf("bootstrap: %v (report: %+v)", err, report)
 	}
@@ -208,7 +208,7 @@ func TestBootstrap_MapsToBootstrapWorkflow(t *testing.T) {
 		FakeAdapter: &adapter.FakeAdapter{},
 		Payload:     map[string]interface{}{"outcome": "BOOTSTRAP_COMPLETE"},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetNone, "", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetNone, target: "", adapter: scripted})
 	if err != nil {
 		t.Fatalf("bootstrap: %v (report: %+v)", err, report)
 	}
@@ -239,7 +239,7 @@ func TestFinalize_MapsToGitFinalizationWorkflow(t *testing.T) {
 		FakeAdapter: &adapter.FakeAdapter{},
 		Payload:     map[string]interface{}{"outcome": "COMMIT_PREPARED", "included": "1 file"},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetNone, "", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetNone, target: "", adapter: scripted})
 	if err != nil {
 		t.Fatalf("finalize: %v (report: %+v)", err, report)
 	}
@@ -278,7 +278,7 @@ func TestVerify_MapsToVerificationWorkflow_NestedResultContract(t *testing.T) {
 			"summary": map[string]interface{}{"aggregate": "PASS", "obligations_evaluated": "1 of 1"},
 		},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetGeneric, "src/auth/", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetGeneric, target: "src/auth/", adapter: scripted})
 	if err != nil {
 		t.Fatalf("verify: %v (report: %+v)", err, report)
 	}
@@ -315,7 +315,7 @@ func TestReview_MapsToReviewWorkflow_NestedResultContract(t *testing.T) {
 			"summary":  map[string]interface{}{"aggregate": "PASS", "findings": "0 findings"},
 		},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetGeneric, "", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetGeneric, target: "", adapter: scripted})
 	if err != nil {
 		t.Fatalf("review: %v (report: %+v)", err, report)
 	}
@@ -346,7 +346,7 @@ func TestVerify_FAILIsBlockedNeverProcessFailure(t *testing.T) {
 			"summary": map[string]interface{}{"aggregate": "FAIL", "obligations_evaluated": "1 of 1"},
 		},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetGeneric, "src/", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetGeneric, target: "src/", adapter: scripted})
 	if err == nil {
 		t.Fatalf("expected a BLOCKED workflow conclusion to be reported as a non-nil error")
 	}
@@ -375,7 +375,7 @@ func TestVerify_UNVERIFIABLEIsBlockedNeverProcessFailure(t *testing.T) {
 			"summary": map[string]interface{}{"aggregate": "UNVERIFIABLE"},
 		},
 	}
-	report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetGeneric, "", scripted)
+	report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetGeneric, target: "", adapter: scripted})
 	if err == nil {
 		t.Fatalf("expected a BLOCKED workflow conclusion to be reported as a non-nil error")
 	}
@@ -406,7 +406,7 @@ func TestReview_DefectRiskKnowledgeGapAreBlockedNeverProcessFailure(t *testing.T
 					"summary": map[string]interface{}{"aggregate": aggregate},
 				},
 			}
-			report, err := runWorkflowWithAdapter(root, l, wf, workflowPath, targetGeneric, "", scripted)
+			report, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetGeneric, target: "", adapter: scripted})
 			if err == nil {
 				t.Fatalf("expected a BLOCKED workflow conclusion (%s) to be reported as a non-nil error", aggregate)
 			}

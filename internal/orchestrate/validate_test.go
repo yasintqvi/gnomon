@@ -3,6 +3,7 @@ package orchestrate
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gnomon/internal/present"
@@ -142,6 +143,86 @@ func TestValidate_MalformedApprovalEvidence_Detected(t *testing.T) {
 	}
 }
 
+// TestValidate_ApprovalEvidenceWarningOnly_SuccessButPrinted proves a warning-level approval
+// issue with nothing else wrong still exits successfully — only errors fail validate — while the
+// warning itself is still printed, never silently dropped.
+func TestValidate_ApprovalEvidenceWarningOnly_SuccessButPrinted(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	l, err := project.Locate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(l.ApprovalsDir(), "SPEC-001")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// An orphaned content snapshot — a warning, no error anywhere in the project.
+	if err := os.WriteFile(filepath.Join(dir, "orphan.content.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Validate(root)
+	if err != nil {
+		t.Fatalf("expected warnings-only to still succeed, got err: %v (report: %+v)", err, report)
+	}
+	if report.Outcome != present.Success {
+		t.Fatalf("expected Success, got %v", report.Outcome)
+	}
+	rendered := present.Render(report, false)
+	if !strings.Contains(rendered, "Approval Evidence Warnings") || !strings.Contains(rendered, "orphan.content.md") {
+		t.Fatalf("expected the warning still printed, got: %s", rendered)
+	}
+}
+
+// TestValidate_ApprovalEvidenceErrorAndWarningTogether_FailsAndPrintsBoth proves an error and a
+// warning found together both appear in the report, with the error still deciding exit status.
+func TestValidate_ApprovalEvidenceErrorAndWarningTogether_FailsAndPrintsBoth(t *testing.T) {
+	root := t.TempDir()
+	configureGitIdentity(t, root)
+	if _, err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	l, err := project.Locate(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(l.ApprovalsDir(), "SPEC-001")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bad.grant.json"), []byte("not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "orphan.content.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Validate(root)
+	if err == nil {
+		t.Fatalf("expected the error to fail validation even alongside a warning")
+	}
+	if report.Outcome != present.Failed {
+		t.Fatalf("expected Failed, got %v", report.Outcome)
+	}
+	rendered := present.Render(report, false)
+	if !strings.Contains(rendered, "Approval Evidence Errors") {
+		t.Fatalf("expected errors printed, got: %s", rendered)
+	}
+	if !strings.Contains(rendered, "Approval Evidence Warnings") {
+		t.Fatalf("expected warnings printed alongside the errors, got: %s", rendered)
+	}
+}
+
 func TestValidate_NeverMutatesProjectFiles(t *testing.T) {
 	root := t.TempDir()
 	configureGitIdentity(t, root)
@@ -151,7 +232,7 @@ func TestValidate_NeverMutatesProjectFiles(t *testing.T) {
 	if _, err := SpecCreate(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Approve(root, "SPEC-001", nil); err != nil {
+	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 
