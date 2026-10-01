@@ -8,18 +8,24 @@ import (
 	"gnomon/internal/specs"
 )
 
-// SpecCreate performs `gnomon spec create <title>` — deterministic Draft Creation, no Agent. The
-// filename slug is mechanically derived from the title itself.
+// SpecCreate performs `gnomon spec create <title>` — deterministic Draft Creation from the short
+// default template, no Agent. The filename slug is mechanically derived from the title itself.
 func SpecCreate(root, title string) (*present.Report, error) {
+	return SpecCreateFrom(root, title, false)
+}
+
+// SpecCreateFrom is SpecCreate with a choice of template: detailed selects the full use-case
+// template (`gnomon spec create --detailed`).
+func SpecCreateFrom(root, title string, detailed bool) (*present.Report, error) {
 	if title == "" {
 		return nil, fmt.Errorf("a title is required")
 	}
-	return createDraftSpec(root, title, specs.Slugify(title))
+	return createDraftSpec(root, title, specs.Slugify(title), detailed)
 }
 
 // createDraftSpec is Draft Creation's one implementation, shared by SpecCreate and
 // AcceptDiscoveryCandidate.
-func createDraftSpec(root, title, slug string) (*present.Report, error) {
+func createDraftSpec(root, title, slug string, detailed bool) (*present.Report, error) {
 	l, err := project.Locate(root)
 	if err != nil {
 		return nil, err
@@ -28,7 +34,11 @@ func createDraftSpec(root, title, slug string) (*present.Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	path, err := specs.CreateDraft(l.SpecificationsDir(), id, title, slug)
+	template, err := l.SpecTemplate(detailed)
+	if err != nil {
+		return nil, err
+	}
+	path, err := specs.CreateDraft(l.SpecificationsDir(), id, title, slug, template)
 	if err != nil {
 		return nil, err
 	}

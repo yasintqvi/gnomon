@@ -146,37 +146,52 @@ func (a *processAdapter) finish() {
 
 func (a *processAdapter) Status() Status { return a.status }
 
-// buildPrompt is the reserved Step 4/5 instruction: where/how to publish the result, pointing back
-// at the workflow's own frontmatter rather than restating its schema. Never instructs the Agent to
-// exit, and never names a provider — Gnomon ends the session itself once the result validates.
+// buildPrompt is the run's whole instruction: which workflow to follow, what it applies to, which
+// project-written knowledge exists, and where to publish the result (pointing at the workflow's own
+// frontmatter rather than restating its schema). Never instructs the Agent to exit and never names
+// a provider — Gnomon ends the session itself once the result validates.
 func buildPrompt(ctx Context) string {
-	var context strings.Builder
+	var b strings.Builder
+	fmt.Fprintf(&b, "You are executing the Gnomon workflow %q for this project.\n\n", ctx.WorkflowIdentity)
+	fmt.Fprintf(&b, "Read and follow the workflow instructions at: %s\n", ctx.WorkflowPath)
+
 	switch {
 	case ctx.SpecIdentity != "":
-		fmt.Fprintf(&context, "\nThe governing Specification is: %s\n", ctx.SpecIdentity)
+		fmt.Fprintf(&b, "\nThe governing Specification is: %s", ctx.SpecIdentity)
+		if ctx.SpecPath != "" {
+			fmt.Fprintf(&b, " (%s)", ctx.SpecPath)
+		}
+		b.WriteString("\n")
 	case ctx.Target != "":
-		fmt.Fprintf(&context, "\nThe target for this run is: %s\n", ctx.Target)
+		fmt.Fprintf(&b, "\nThe target for this run is: %s\n", ctx.Target)
 	}
-	// A Handoff is orthogonal to SpecIdentity/Target (can accompany either or neither), so it's
-	// appended rather than folded into the same case — it explains why the run started, never a
-	// substitute for SpecIdentity/Target's own requirements.
+
+	if len(ctx.Knowledge) > 0 {
+		b.WriteString("\nProject knowledge recorded in .gnomon/ (read only what this task needs):\n")
+		for _, k := range ctx.Knowledge {
+			fmt.Fprintf(&b, "- %s\n", k)
+		}
+	} else {
+		b.WriteString("\nNo project knowledge is recorded in .gnomon/ beyond Specifications; learn the rest from the repository.\n")
+	}
+	b.WriteString("\nSpecifications and these files are the project's authoritative decisions. If your own memory, chat history, or other instruction files disagree with them, follow .gnomon/ and report the conflict in your result.\n")
+
+	// A Handoff is orthogonal to SpecIdentity/Target (can accompany either or neither): it explains
+	// why the run started, never a substitute for SpecIdentity/Target's own requirements.
 	if ctx.Handoff != nil {
-		fmt.Fprintf(&context, "\nThis run was launched to resolve a finding from an earlier %s of %s. Address it while following this workflow's own normal process — the finding explains why this run started; it does not replace this workflow's own target or requirements. If resolving it requires a Human decision or any other material input, ask the Human directly in this session:\n\nFinding: %s — %s\nSummary: %s\nEvidence: %s\n",
+		fmt.Fprintf(&b, "\nThis run was launched to resolve a finding from an earlier %s of %s. Address it while following this workflow's own normal process — the finding explains why this run started; it does not replace this workflow's own target or requirements. If resolving it requires a Human decision or any other material input, ask the Human directly in this session:\n\nFinding: %s — %s\nSummary: %s\nEvidence: %s\n",
 			ctx.Handoff.OriginWorkflow, ctx.Handoff.OriginTarget, ctx.Handoff.FindingID, ctx.Handoff.Classification, ctx.Handoff.Summary, ctx.Handoff.Evidence)
-		fmt.Fprintf(&context, "\nObjective: address this finding while following the %s workflow's own process.\n", ctx.WorkflowIdentity)
+		fmt.Fprintf(&b, "\nObjective: address this finding while following the %s workflow's own process.\n", ctx.WorkflowIdentity)
 	}
-	return fmt.Sprintf(`You are executing the Gnomon workflow %q for this project.
 
-Read and follow the workflow instructions at: %s
-%s
-Once you have completed the workflow, publish exactly one valid JSON result to this path:
+	fmt.Fprintf(&b, `
+When the workflow is complete, publish exactly one valid JSON result to this path:
 %s
 
-The JSON object must have exactly this envelope shape:
-{"workflow": %q, "run_id": %q, "payload": { ... }}
+Shape: {"workflow": %q, "run_id": %q, "payload": { ... }}
+The payload must follow the "result" schema in the frontmatter of %s exactly; do not invent fields. Write the file once.
 
-The "payload" must conform to the Result Contract declared in this workflow file's own frontmatter (the "result" block at the top of %s) — follow that schema exactly; do not invent fields it does not declare. Write the file exactly once.
-
-Gnomon is watching for that file and will end this session automatically once it appears and validates — you do not need to exit or end the conversation yourself.`,
-		ctx.WorkflowIdentity, ctx.WorkflowPath, context.String(), ctx.ResultPath, ctx.WorkflowIdentity, ctx.RunID, ctx.WorkflowPath)
+Gnomon is watching for that file and will end this session automatically once it validates — you do not need to exit or end the conversation yourself.`,
+		ctx.ResultPath, ctx.WorkflowIdentity, ctx.RunID, ctx.WorkflowPath)
+	return b.String()
 }

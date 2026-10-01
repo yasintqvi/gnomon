@@ -18,7 +18,7 @@ func TestApprove_Placeholders_InteractiveNo_WritesNothingAndCancels(t *testing.T
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -65,7 +65,7 @@ func TestApprove_Placeholders_InteractiveYes_ApprovesNormally(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -89,7 +89,7 @@ func TestApprove_Placeholders_NonInteractive_ApprovesAndReportsWarning(t *testin
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -153,39 +153,75 @@ func TestApprove_NoPlaceholders_NoWarningNoPrompt(t *testing.T) {
 	}
 }
 
-func TestApprove_TemplateMissing_NoWarningApprovedNormally(t *testing.T) {
+func TestApprove_UnfilledTemplate_RefusedEvenNonInteractive(t *testing.T) {
+	for _, detailed := range []bool{false, true} {
+		root := t.TempDir()
+		configureGitIdentity(t, root)
+		if _, err := Init(root); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := SpecCreateFrom(root, "Password Reset", detailed); err != nil {
+			t.Fatal(err)
+		}
+
+		// nil confirm is the non-interactive path, which used to approve after a warning.
+		report, err := Approve(root, "SPEC-001", nil, nil)
+		if err == nil {
+			t.Fatalf("detailed=%v: expected an unfilled template to be refused", detailed)
+		}
+		if report == nil || report.Outcome != present.Blocked {
+			t.Fatalf("detailed=%v: expected Blocked, got %+v", detailed, report)
+		}
+		l, _ := project.Locate(root)
+		if entries, _ := os.ReadDir(filepath.Join(l.ApprovalsDir(), "SPEC-001")); len(entries) > 0 {
+			t.Fatalf("detailed=%v: expected no approval evidence, found %v", detailed, entries)
+		}
+	}
+}
+
+// TestApprove_CustomizedLegacyTemplate_IsUsedAndRecognized covers a project whose own
+// .gnomon/specifications/SPEC-000-use-case-name.md was edited: new Specifications come from it,
+// an untouched one is refused, and its own placeholders drive the warning.
+func TestApprove_CustomizedLegacyTemplate_IsUsedAndRecognized(t *testing.T) {
 	root := t.TempDir()
 	configureGitIdentity(t, root)
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
-		t.Fatal(err)
-	}
-
 	l, err := project.Locate(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(filepath.Join(l.SpecificationsDir(), "SPEC-000-use-case-name.md")); err != nil {
+	custom := "# SPEC-[ID] — [Use Case Name]\n\n## Story\n\n[Team-specific story field]\n\n## Checks\n\n[Team-specific check]\n"
+	if err := os.WriteFile(filepath.Join(l.SpecificationsDir(), "SPEC-000-use-case-name.md"), []byte(custom), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	confirmCalled := false
-	confirm := func(warning string) (bool, error) {
-		confirmCalled = true
-		return true, nil
+	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+		t.Fatal(err)
 	}
-
-	report, err := Approve(root, "SPEC-001", nil, confirm)
+	specPath := filepath.Join(l.SpecificationsDir(), "SPEC-001-password-reset.md")
+	created, err := os.ReadFile(specPath)
 	if err != nil {
-		t.Fatalf("approve: %v", err)
+		t.Fatal(err)
 	}
-	if confirmCalled {
-		t.Fatalf("expected the placeholder confirmation to never be asked when the template is missing")
+	if !strings.Contains(string(created), "[Team-specific story field]") {
+		t.Fatalf("expected the project's customized template to be used, got:\n%s", created)
 	}
-	if report.Outcome != present.Success {
-		t.Fatalf("expected Success, got %v", report.Outcome)
+	if _, err := Approve(root, "SPEC-001", nil, nil); err == nil {
+		t.Fatalf("expected the untouched draft to be refused")
+	}
+
+	edited := strings.Replace(string(created), "[Team-specific story field]", "A user resets a forgotten password by email.", 1)
+	if err := os.WriteFile(specPath, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var warning string
+	report, err := Approve(root, "SPEC-001", nil, func(w string) (bool, error) { warning = w; return true, nil })
+	if err != nil || report.Outcome != present.Success {
+		t.Fatalf("expected approval to proceed after confirmation, got %+v (err=%v)", report, err)
+	}
+	if !strings.Contains(warning, "[Team-specific check]") || strings.Contains(warning, "[Team-specific story field]") {
+		t.Fatalf("expected the warning to list exactly the remaining custom placeholder, got:\n%s", warning)
 	}
 }
 
@@ -195,7 +231,7 @@ func TestApprove_AlreadyApproved_NoPlaceholderPrompt(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, func(string) (bool, error) { return true, nil }); err != nil {

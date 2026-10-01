@@ -2,7 +2,6 @@ package orchestrate
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -64,6 +63,13 @@ func Validate(root string) (*present.Report, error) {
 		hasError = true
 	}
 
+	// Informational: which workflows the project customizes, and any stale copies being ignored.
+	if sec, err := workflowSourceSection(l); err != nil {
+		return nil, err
+	} else if sec != nil {
+		sections = append(sections, *sec)
+	}
+
 	// 7. Approval evidence: errors exclude a record from derivation and fail validate; warnings are
 	// reported but don't (cli/APPROVAL_RUNTIME.md).
 	evIssues, err := approval.ValidateEvidence(l.ApprovalsDir(), l.SpecificationsDir())
@@ -93,7 +99,7 @@ func Validate(root string) (*present.Report, error) {
 
 	if !hasError {
 		summary := "Project structure and Contracts are valid"
-		if len(sections) > 0 {
+		if len(warnLines) > 0 {
 			summary = fmt.Sprintf("Project structure and Contracts are valid, with %d warning(s)", len(warnLines))
 		}
 		return &present.Report{Outcome: present.Success, Summary: summary, Sections: sections}, nil
@@ -112,11 +118,12 @@ type workflowContractIssue struct {
 	problem string
 }
 
-// validateWorkflowContracts loads every workflow file via contract.Load (the same parser real
-// invocations use, so validate can't accept what a real run would reject) and reports load
-// failures plus any identity declared by more than one file (cli/WORKFLOW_CONTRACT.md).
+// validateWorkflowContracts parses every workflow in effect (bundled, or the project's own) with
+// the same parser real invocations use, so validate can't accept what a real run would reject,
+// and reports parse failures plus any identity declared by more than one file
+// (cli/WORKFLOW_CONTRACT.md).
 func validateWorkflowContracts(l project.Layout) ([]workflowContractIssue, error) {
-	entries, err := os.ReadDir(l.WorkflowsDir())
+	all, _, err := l.Workflows()
 	if err != nil {
 		return nil, err
 	}
@@ -124,16 +131,13 @@ func validateWorkflowContracts(l project.Layout) ([]workflowContractIssue, error
 	var issues []workflowContractIssue
 	byIdentity := map[string][]string{}
 
-	for _, e := range entries {
-		if e.IsDir() || filepath.Ext(e.Name()) != ".md" {
-			continue
-		}
-		wf, err := contract.Load(filepath.Join(l.WorkflowsDir(), e.Name()))
+	for _, f := range all {
+		wf, err := contract.Parse(f.Data, f.Name)
 		if err != nil {
-			issues = append(issues, workflowContractIssue{subject: e.Name(), problem: err.Error()})
+			issues = append(issues, workflowContractIssue{subject: f.Name, problem: err.Error()})
 			continue
 		}
-		byIdentity[wf.Identity] = append(byIdentity[wf.Identity], e.Name())
+		byIdentity[wf.Identity] = append(byIdentity[wf.Identity], f.Name)
 	}
 
 	for identity, files := range byIdentity {
@@ -146,4 +150,44 @@ func validateWorkflowContracts(l project.Layout) ([]workflowContractIssue, error
 	}
 
 	return issues, nil
+}
+
+// workflowSourceSection describes, informationally, which project workflow files are in effect and
+// which are unmodified copies an older Gnomon left behind (ignored in favor of the bundled
+// version). Nil when the project uses only bundled workflows and has no such copies.
+func workflowSourceSection(l project.Layout) (*present.Section, error) {
+	all, stale, err := l.Workflows()
+	if err != nil {
+		return nil, err
+	}
+	var lines []string
+	for _, f := range all {
+		if f.Customized() {
+			lines = append(lines, fmt.Sprintf("customized: %s (used instead of the bundled version)", relToRoot(l, f.ProjectPath)))
+		}
+	}
+	if len(stale) > 0 {
+		lines = append(lines, fmt.Sprintf("%d unmodified workflow cop%s from an older Gnomon are ignored; the current bundled versions are used. They can be deleted:", len(stale), plural(len(stale), "y", "ies")))
+		for _, p := range stale {
+			lines = append(lines, "  "+relToRoot(l, p))
+		}
+	}
+	if len(lines) == 0 {
+		return nil, nil
+	}
+	return &present.Section{Label: "Workflows", Body: strings.Join(lines, "\n")}, nil
+}
+
+func relToRoot(l project.Layout, p string) string {
+	if rel, err := filepath.Rel(l.Root, p); err == nil {
+		return filepath.ToSlash(rel)
+	}
+	return p
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }

@@ -10,17 +10,15 @@ import (
 
 var describeCmd = &cobra.Command{
 	Use:     "describe",
-	Short:   "Establish or update initial project knowledge (Initial Knowledge Establishment)",
+	Short:   "Optionally record project facts the code doesn't show",
 	GroupID: groupProject,
-	Long: `Establish or update initial project knowledge (Initial Knowledge Establishment).
+	Long: `Optionally record project facts the code doesn't show.
 
-Hands the project to the Agent, which inspects existing project knowledge and
-repository evidence — source, docs, configuration, and whatever else carries
-project intent — and reconciles it into recorded knowledge. When something
-material can't be established from that evidence, the Agent asks you directly,
-in the same session, rather than guessing. This is what lets the same command
-work for an established project and a brand-new one: what's already evident is
-used as-is, and only genuine gaps are ever asked about.`,
+Hands the project to the Agent, which inspects the repository and any recorded
+knowledge, asks you only for what it can't determine and that matters for building
+features — purpose, users, hard constraints, project-wide decisions — and records it
+briefly in .gnomon/context/PROJECT.md. It is not required: the normal path starts
+with "gnomon spec".`,
 	Args: requireArgs("no arguments", cobra.NoArgs),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		root, err := os.Getwd()

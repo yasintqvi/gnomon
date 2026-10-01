@@ -2,6 +2,7 @@ package orchestrate
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"gnomon/internal/adapter"
@@ -37,8 +38,16 @@ func TestRun_ResolvesCorrectWorkflowByIdentity(t *testing.T) {
 	if wf.Result.TerminalPath != "summary.aggregate" {
 		t.Fatalf("expected the nested Result Contract to be loaded correctly via identity resolution, got terminal_path=%q", wf.Result.TerminalPath)
 	}
-	if got, want := path, l.WorkflowsDir()+"/verification.md"; got != want {
-		t.Fatalf("expected the real resolved path %q, got %q", want, got)
+	// Not customized, so the Agent reads the current bundled version from the runtime directory.
+	if got, want := path, filepath.Join(l.Root, ".gnomon-runtime", "workflows", "verification.md"); got != want {
+		t.Fatalf("expected the bundled workflow's runtime path %q, got %q", want, got)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !project.IsStock("verification.md", data) {
+		t.Fatalf("expected the runtime copy to be the bundled workflow")
 	}
 }
 
@@ -72,6 +81,9 @@ func TestRun_DuplicateIdentity_DeterministicRefusal(t *testing.T) {
 		"  terminal_path: outcome\n  classification:\n    OK: success\n  schema:\n    type: object\n" +
 		"    required: [outcome]\n    properties:\n      outcome:\n        type: string\n        enum: [OK]\n" +
 		"---\n# Duplicate\n"
+	if err := os.MkdirAll(l.WorkflowsDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := writeFile(t, l.WorkflowsDir()+"/bootstrap-copy.md", duplicate); err != nil {
 		t.Fatal(err)
 	}

@@ -67,7 +67,7 @@ func writeForgedGrant(t *testing.T, path string) {
 
 func TestRunGuard_AgentAddsGrantFile_RunRejectedFileRemovedSpecStillDraft(t *testing.T) {
 	root := setupApprovedSpec(t) // SPEC-001 Approved
-	if _, err := SpecCreate(root, "Email Verification"); err != nil {
+	if _, err := specCreateDefined(root, "Email Verification"); err != nil {
 		t.Fatal(err) // SPEC-002, Draft
 	}
 	l, wf := mustPrepareImplementation(t, root, "SPEC-001")
@@ -155,7 +155,7 @@ func TestRunGuard_AgentModifiesExistingGrant_OriginalBytesRestored(t *testing.T)
 
 func TestRunGuard_AgentDeletesRevocation_FileRestoredSpecRemainsDraft(t *testing.T) {
 	root := setupApprovedSpec(t) // SPEC-001 Approved
-	if _, err := SpecCreate(root, "Email Verification"); err != nil {
+	if _, err := specCreateDefined(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-002", nil, nil); err != nil {
@@ -272,7 +272,7 @@ func TestRunGuard_AgentTouchesNothing_ReportUnaffected(t *testing.T) {
 
 func TestRunGuard_AgentFailsWithoutResult_StillRestoredAndRejected(t *testing.T) {
 	root := setupApprovedSpec(t)
-	if _, err := SpecCreate(root, "Email Verification"); err != nil {
+	if _, err := specCreateDefined(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
 	l, wf := mustPrepareImplementation(t, root, "SPEC-001")
@@ -358,7 +358,7 @@ func TestRunLock_AbsentAfterFailedRun(t *testing.T) {
 
 func TestRunLock_AbsentAfterRejectedRun(t *testing.T) {
 	root := setupApprovedSpec(t)
-	if _, err := SpecCreate(root, "Email Verification"); err != nil {
+	if _, err := specCreateDefined(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
 	l, wf := mustPrepareImplementation(t, root, "SPEC-001")
@@ -392,7 +392,7 @@ func TestRunGuard_RestorationFailure_ReportListsWhatCouldNotBeRestored(t *testin
 		t.Skip("running as root bypasses permission checks")
 	}
 	root := setupApprovedSpec(t)
-	if _, err := SpecCreate(root, "Email Verification"); err != nil {
+	if _, err := specCreateDefined(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
 	l, wf := mustPrepareImplementation(t, root, "SPEC-001")

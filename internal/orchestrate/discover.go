@@ -125,5 +125,5 @@ func AcceptDiscoveryCandidate(root string, candidate *DiscoveryCandidate) (*pres
 	if candidate == nil || candidate.Title == "" || candidate.Identity == "" {
 		return nil, fmt.Errorf("a candidate with both a title and identity is required")
 	}
-	return createDraftSpec(root, candidate.Title, specs.Slugify(candidate.Identity))
+	return createDraftSpec(root, candidate.Title, specs.Slugify(candidate.Identity), false)
 }

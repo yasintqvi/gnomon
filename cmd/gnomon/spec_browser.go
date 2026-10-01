@@ -196,6 +196,9 @@ func renderSpecDetail(d *orchestrate.SpecDetail, p present.Palette) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n", p.Heading(fmt.Sprintf("%s — %s", d.ID, d.Title)))
 	fmt.Fprintf(&b, "  Lifecycle:   %s\n", lifecycleStyle(p, d.Lifecycle))
+	if d.Note != "" {
+		fmt.Fprintf(&b, "               %s\n", p.Muted(d.Note))
+	}
 	fmt.Fprintf(&b, "  Fingerprint: %s\n", p.Muted(short(d.Fingerprint)))
 	if d.ActiveGrant != nil {
 		fmt.Fprintf(&b, "  Approved by: %s\n", p.Muted(d.ActiveGrant.Approver))

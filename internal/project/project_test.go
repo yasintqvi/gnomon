@@ -6,33 +6,24 @@ import (
 	"testing"
 )
 
-func TestMaterialize_FreshInit_CanonicalLayout(t *testing.T) {
+func TestMaterialize_FreshInit_MinimalLayout(t *testing.T) {
 	root := t.TempDir()
-	if err := Materialize(root); err != nil {
+	if err := Materialize(root, false); err != nil {
 		t.Fatal(err)
 	}
 	l := Layout{Root: root}
 
-	expectFile := func(rel string) {
-		t.Helper()
-		if _, err := os.Stat(filepath.Join(l.GnomonRoot(), rel)); err != nil {
-			t.Fatalf("expected %s to exist: %v", rel, err)
+	for _, dir := range []string{l.ApprovalsDir(), l.SpecificationsDir()} {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) != 0 {
+			t.Fatalf("expected %s to exist and start empty, got %d entries (err=%v)", dir, len(entries), err)
 		}
 	}
-	expectFile(filepath.Join("workflows", "implementation.md"))
-	expectFile(filepath.Join("specifications", "SPEC-000-use-case-name.md"))
-	expectFile(filepath.Join("specifications", "SPECIFICATION_LIFECYCLE.md"))
-	expectFile(filepath.Join("evaluations", "SPECIFICATION_READINESS_CRITERIA.md"))
-	expectFile(filepath.Join("contracts", "use-case-execution.md"))
-	expectFile(filepath.Join("decisions", "ADR-000-decision-title.md"))
-	expectFile(filepath.Join("context", "PROJECT.md"))
-
-	if info, err := os.Stat(l.ApprovalsDir()); err != nil || !info.IsDir() {
-		t.Fatalf("expected approvals/ to exist as an empty directory")
-	}
-	entries, err := os.ReadDir(l.ApprovalsDir())
-	if err != nil || len(entries) != 0 {
-		t.Fatalf("expected approvals/ to start empty, got %v entries (err=%v)", len(entries), err)
+	// No workflows, knowledge templates, contracts, or design documents by default.
+	for _, absent := range []string{"workflows", "context", "contracts", "evaluations", "decisions"} {
+		if _, err := os.Stat(filepath.Join(l.GnomonRoot(), absent)); !os.IsNotExist(err) {
+			t.Fatalf("a plain init must not create .gnomon/%s (err=%v)", absent, err)
+		}
 	}
 
 	v, err := l.ContractVersion()
@@ -45,20 +36,53 @@ func TestMaterialize_FreshInit_CanonicalLayout(t *testing.T) {
 	if !l.IsInitialized() {
 		t.Fatalf("expected project to be reported as initialized")
 	}
+	if missing := l.MissingSections(); len(missing) != 0 {
+		t.Fatalf("a fresh minimal project must pass the structural check, missing: %v", missing)
+	}
+	if k, err := l.KnowledgeFiles(); err != nil || len(k) != 0 {
+		t.Fatalf("a fresh project has no project knowledge, got %v (err=%v)", k, err)
+	}
+}
+
+func TestMaterialize_Full_CopiesOptionalTemplatesButNoWorkflows(t *testing.T) {
+	root := t.TempDir()
+	if err := Materialize(root, true); err != nil {
+		t.Fatal(err)
+	}
+	l := Layout{Root: root}
+	for _, rel := range []string{
+		filepath.Join("context", "PROJECT.md"),
+		filepath.Join("context", "UI_FOUNDATION.md"),
+		filepath.Join("contracts", "use-case-execution.md"),
+		filepath.Join("decisions", "ADR-000-decision-title.md"),
+		filepath.Join("evaluations", "SPECIFICATION_READINESS_CRITERIA.md"),
+		filepath.Join("specifications", "SPECIFICATION_LIFECYCLE.md"),
+	} {
+		if _, err := os.Stat(filepath.Join(l.GnomonRoot(), rel)); err != nil {
+			t.Fatalf("expected --full to create %s: %v", rel, err)
+		}
+	}
+	if _, err := os.Stat(l.WorkflowsDir()); !os.IsNotExist(err) {
+		t.Fatalf("workflows are read from the binary; --full must not copy them")
+	}
+	// Unfilled templates are never presented as project knowledge.
+	if k, err := l.KnowledgeFiles(); err != nil || len(k) != 0 {
+		t.Fatalf("unmodified templates must not count as knowledge, got %v (err=%v)", k, err)
+	}
 }
 
 func TestMaterialize_ReRun_NeverOverwritesExistingContent(t *testing.T) {
 	root := t.TempDir()
-	if err := Materialize(root); err != nil {
+	if err := Materialize(root, true); err != nil {
 		t.Fatal(err)
 	}
 	l := Layout{Root: root}
-	customPath := filepath.Join(l.WorkflowsDir(), "implementation.md")
+	customPath := filepath.Join(l.GnomonRoot(), "context", "PROJECT.md")
 	if err := os.WriteFile(customPath, []byte("customized content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := Materialize(root); err != nil {
+	if err := Materialize(root, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -71,42 +95,23 @@ func TestMaterialize_ReRun_NeverOverwritesExistingContent(t *testing.T) {
 	}
 }
 
-func TestMaterialize_FillsOnlyMissingParts(t *testing.T) {
-	root := t.TempDir()
-	if err := Materialize(root); err != nil {
-		t.Fatal(err)
-	}
-	l := Layout{Root: root}
-	victim := filepath.Join(l.WorkflowsDir(), "testing.md")
-	if err := os.Remove(victim); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := Materialize(root); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(victim); err != nil {
-		t.Fatalf("expected a manually removed bundled file to be restored: %v", err)
-	}
-}
-
 func TestMaterialize_RefusesUnsupportedVersion(t *testing.T) {
 	root := t.TempDir()
-	if err := Materialize(root); err != nil {
+	if err := Materialize(root, false); err != nil {
 		t.Fatal(err)
 	}
 	l := Layout{Root: root}
 	if err := os.WriteFile(l.ContractVersionPath(), []byte("99"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := Materialize(root); err == nil {
+	if err := Materialize(root, false); err == nil {
 		t.Fatalf("expected Materialize to refuse an unsupported existing contract version")
 	}
 }
 
 func TestLocate_WalksUpwardFromNestedDirectory(t *testing.T) {
 	root := t.TempDir()
-	if err := Materialize(root); err != nil {
+	if err := Materialize(root, false); err != nil {
 		t.Fatal(err)
 	}
 	nested := filepath.Join(root, "a", "b", "c")

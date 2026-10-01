@@ -51,18 +51,26 @@ Every other lifecycle action has a non-interactive equivalent through
 var specCreateCmd = &cobra.Command{
 	Use:   "create <title>",
 	Short: "Create a new Draft Specification from the template",
-	Args:  requireArgs("<title>", cobra.ExactArgs(1)),
+	Long: `Create a new Draft Specification.
+
+The default template is short: Goal, Decisions (each question with the user's answer),
+Acceptance Criteria, and Out of Scope. --detailed uses the full use-case template
+(actors, flows, business rules, inputs/outputs, dependencies) instead.`,
+	Args: requireArgs("<title>", cobra.ExactArgs(1)),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		root, err := os.Getwd()
 		if err != nil {
 			return err
 		}
-		report, err := orchestrate.SpecCreate(root, args[0])
+		report, err := orchestrate.SpecCreateFrom(root, args[0], specCreateDetailed)
 		return renderReport(report, err)
 	},
 }
 
+var specCreateDetailed bool
+
 func init() {
+	specCreateCmd.Flags().BoolVar(&specCreateDetailed, "detailed", false, "use the detailed use-case template instead of the short one")
 	specCmd.AddCommand(specCreateCmd)
 	rootCmd.AddCommand(specCmd)
 }

@@ -2,8 +2,6 @@ package orchestrate
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"gnomon/internal/approval"
@@ -114,11 +112,24 @@ func Approve(root, specID string, prompt PromptFunc, confirm ConfirmFunc) (*pres
 		}, nil
 	}
 
-	// Whether Define was ever reached isn't persisted, so still reading like the untouched template
-	// is the only available signal. Never blocks approval — the Human decides either way.
+	// A Specification with nothing written beyond its template would approve no behavior at all —
+	// refused outright, interactive or not. Merely unfinished content (some placeholders left) is
+	// the Human's call: warned about, never blocked.
+	templates := l.SpecTemplateCandidates()
+	if specs.EffectivelyEmpty(templates, content, specs.Identity(specID)) {
+		return &present.Report{
+			Outcome: present.Blocked,
+			Summary: fmt.Sprintf("%s has nothing to approve yet", specID),
+			Target:  specID,
+			Sections: []present.Section{{
+				Label: "Unresolved",
+				Body:  "It contains only the unfilled template. Write its goal and acceptance criteria, or run Define, then approve.",
+			}},
+			Next: specWorkspaceNext(l, specID, ""),
+		}, fmt.Errorf("%s contains only the unfilled template", specID)
+	}
 	if confirm != nil {
-		templatePath := filepath.Join(l.SpecificationsDir(), "SPEC-000-use-case-name.md")
-		if template, tmplErr := os.ReadFile(templatePath); tmplErr == nil {
+		if template := specs.ClosestTemplate(templates, content, specs.Identity(specID)); template != nil {
 			if remaining := specs.RemainingPlaceholders(template, content); len(remaining) > 0 {
 				proceed, err := confirm(placeholderWarning(specID, remaining))
 				if err != nil {

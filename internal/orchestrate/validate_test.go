@@ -52,7 +52,7 @@ func TestValidate_MissingCanonicalDirectory_Detected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.RemoveAll(filepath.Join(l.GnomonRoot(), "contracts")); err != nil {
+	if err := os.RemoveAll(filepath.Join(l.GnomonRoot(), "approvals")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -80,6 +80,9 @@ func TestValidate_DuplicateWorkflowIdentity_Detected(t *testing.T) {
 		"  terminal_path: outcome\n  classification:\n    OK: success\n  schema:\n    type: object\n" +
 		"    required: [outcome]\n    properties:\n      outcome:\n        type: string\n        enum: [OK]\n" +
 		"---\n# Duplicate\n"
+	if err := os.MkdirAll(l.WorkflowsDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(l.WorkflowsDir(), "bootstrap-copy.md"), []byte(duplicate), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -101,6 +104,9 @@ func TestValidate_MalformedWorkflowFrontmatter_Detected(t *testing.T) {
 	}
 	l, err := project.Locate(root)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(l.WorkflowsDir(), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(l.WorkflowsDir(), "broken.md"), []byte("---\nidentity: [unclosed\n---\n# Broken\n"), 0o644); err != nil {
@@ -156,7 +162,7 @@ func TestValidate_ApprovalEvidenceWarningOnly_SuccessButPrinted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(l.ApprovalsDir(), "SPEC-001")
@@ -193,7 +199,7 @@ func TestValidate_ApprovalEvidenceErrorAndWarningTogether_FailsAndPrintsBoth(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(l.ApprovalsDir(), "SPEC-001")
@@ -229,7 +235,7 @@ func TestValidate_NeverMutatesProjectFiles(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {

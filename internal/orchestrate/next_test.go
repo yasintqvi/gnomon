@@ -44,7 +44,7 @@ func TestNext_DraftSpecification_OffersDefineAndApprove_NotImplementOrTest(t *te
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -152,10 +152,10 @@ func TestNext_MultipleDraftSpecifications_AllListedNoneChosen(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Email Verification"); err != nil {
+	if _, err := specCreateDefined(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -181,10 +181,10 @@ func TestNext_MultipleApprovedSpecifications_AllListedNoneChosen(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Email Verification"); err != nil {
+	if _, err := specCreateDefined(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -210,10 +210,10 @@ func TestNext_MixedDraftAndApproved_BothRepresentedDistinctly(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Email Verification"); err != nil {
+	if _, err := specCreateDefined(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-002", nil, nil); err != nil {
@@ -280,7 +280,7 @@ func TestNext_NotAGitRepository_SpecGuidanceStillProduced_GitFinalizationNotAppl
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -309,7 +309,7 @@ func TestNext_UnexpectedGitFailure_PreservesSpecGuidance_NotMisclassifiedAsNoRep
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	// Corrupt the index so `git rev-parse --git-dir` still succeeds (it is still a Git

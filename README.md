@@ -72,30 +72,18 @@ $ gnomon init
 
 ✓ Gnomon project initialized
 
-→ gnomon describe
-  Establish or reconcile project knowledge before starting work.
+→ gnomon spec
+  Create a Specification for the change you want, then Define it.
 ```
 
-Gnomon creates a `.gnomon/` directory inside the repository. This is where project knowledge, Specifications, decisions, workflows, and the other engineering artifacts used by Gnomon live.
+This creates a small `.gnomon/` directory: `specifications/`, `approvals/`, and `CONTRACT_VERSION`. Nothing else is copied in. Workflows and Specification templates come from the Gnomon binary, so they stay current when you run `gnomon update`.
 
-Next, let Gnomon establish what the project already knows:
+The normal path starts right away with a Specification. Two optional steps exist for when they help:
 
-```text
-$ gnomon describe
-```
+- `gnomon describe` records the few project facts an agent can't learn from the code — purpose, users, hard constraints, project-wide decisions — in a short `.gnomon/context/PROJECT.md`.
+- `gnomon bootstrap` makes sure the project builds and its tests run, so later work can be checked.
 
-The agent inspects the repository and any project knowledge already recorded — source, docs, configuration, whatever's there — and establishes or reconciles knowledge such as the project's purpose, domain, architecture, stack, and conventions from it. If something material genuinely can't be determined that way, it asks you directly, in the same session, rather than guessing; on a brand-new project with little to inspect yet, that's how it learns what you're building.
-
-Gnomon doesn't require you to explain an existing project from scratch every time a new session begins. That knowledge stays with the repository and can evolve with it.
-
-Once the project knowledge is established, Gnomon points you toward bootstrap:
-
-```text
-→ gnomon bootstrap
-  Establish a verified runnable baseline for the project.
-```
-
-Bootstrap gives future work a known engineering baseline. These onboarding steps are recommended rather than permanent gates — once the project is established, normal work revolves around Specifications.
+`gnomon init --full` additionally creates the longer knowledge, design, contract, and ADR templates earlier versions created by default. Templates you haven't filled in are never handed to the agent as project knowledge.
 
 ### 2. Start a feature
 
@@ -118,7 +106,7 @@ Specifications
 ↑/↓ navigate • Enter select • Esc back
 ```
 
-Choose **Create Specification** and enter:
+Choose **Create Specification** (or run `gnomon spec create "<title>"`) and enter:
 
 ```text
 Mark a task complete
@@ -137,6 +125,19 @@ SPEC-001 — Mark a task complete
     Approve
     Back
 ```
+
+The new Specification uses a short template:
+
+```markdown
+# SPEC-001 — Mark a task complete
+
+## Goal
+## Decisions          (each question with the answer you gave)
+## Acceptance Criteria
+## Out of Scope
+```
+
+`gnomon spec create --detailed` uses the full use-case template (actors, flows, business rules, inputs and outputs, dependencies) when a change needs it.
 
 At this point you have an identity for the feature, but not an approved requirement.
 
@@ -204,7 +205,9 @@ SPEC-001 — Mark a task complete
 
 Choose **Implement** and the agent works against the approved Specification while following the knowledge and conventions already established for the project.
 
-Approval doesn't automatically start implementation, and defining a Specification doesn't automatically approve it. Each transition remains an explicit choice. Approving a Specification that still reads like the untouched template warns you and, in an interactive terminal, asks you to confirm before proceeding — it's still your call either way.
+Approval doesn't automatically start implementation, and defining a Specification doesn't automatically approve it. Each transition remains an explicit choice.
+
+A Specification that still contains only the unfilled template can't be approved — there would be nothing to approve. One that is partly filled in (some placeholders left) warns you and, in an interactive terminal, asks you to confirm; that remains your call.
 
 ### 4. Keep working from the Specification
 
@@ -261,9 +264,10 @@ That is still the same feature, but it is no longer the same requirement you app
 Gnomon recognizes that the approved content has changed:
 
 ```text
-SPEC-001 — Mark a task complete
+$ gnomon status
 
-  Lifecycle: Draft
+Specifications
+  SPEC-001: Draft — changed since approval on 2026-09-24 (1 line(s) changed)
 ```
 
 The revised Specification needs your approval again before work that requires an approved Specification can continue.
@@ -336,6 +340,26 @@ gnomon run review src/tasks/
 
 The normal Specification workspace stays focused on the actions relevant to the Specification itself; the generic `run` interface is there when you need direct access to a workflow.
 
+Verification reports each acceptance criterion with its evidence and one of three results:
+
+```text
+! Verification: 1 passed, 0 failed, 1 unverified
+
+Criteria
+  1. passed     An open task can be marked complete
+                Source: SPEC-001, criterion 1
+                Evidence: tests/TaskTest.php::test_complete passed
+  2. unverified A completed task can be reopened
+                Source: SPEC-001, criterion 2
+                Evidence: No evidence was reported, so this criterion is unverified.
+
+Note
+  The Agent gathered and reported this evidence. It shows what was checked and how,
+  not independent proof that the product works.
+```
+
+A criterion reported as passing without evidence is shown as unverified, and a verification with no criteria never reports success.
+
 When Verification or Review finds something to act on, it doesn't just report it and stop — the same interactive session offers to resolve it. Each finding may come with a recommended workflow, reasoned from what actually caused it rather than mechanically from its classification or result: two findings that fail for the same reason can still warrant different fixes, and two that fail differently can end up recommending the same one. You stay in control of what happens with it:
 
 ```text
@@ -378,6 +402,33 @@ Confirming launches Implementation with this finding as context, the same way it
 
 Skipping a finding doesn't accept, waive, or resolve it — it just means nothing is launched for it this time. Findings aren't tracked between runs; each Verification or Review reports the project's current state, not a backlog.
 
+## Workflows and upgrades
+
+Workflows are read from the Gnomon binary. To change one for a project:
+
+```sh
+gnomon workflows                          # what's in effect, and where it comes from
+gnomon workflows customize review.md      # copy it into .gnomon/workflows/ and edit it there
+```
+
+An edited file in `.gnomon/workflows/` replaces the bundled workflow of the same name; a new file there adds a workflow you run with `gnomon run <identity>`.
+
+**Existing projects need no migration.** Workflow files an older `gnomon init` copied into `.gnomon/workflows/` are recognized as unmodified copies and ignored in favor of the current versions (`gnomon validate` lists them; you can delete them). Copies you edited stay in effect. Existing Specifications, approvals, and edited knowledge files keep working; unfilled templates stop being handed to the agent.
+
+## Working with agents outside Gnomon
+
+Product decisions and approved behavior live in `.gnomon/`: each decision in the Specification it governs, project-wide ones in `.gnomon/context/`. Gnomon tells the agent that these override its own memory and other instruction files. An agent's private memory (for example Claude Code's auto memory or Codex memories) is per machine and invisible to other agents and teammates, so record decisions in `.gnomon/`, not there.
+
+If you also work with agents directly, you can add this optional pointer to `AGENTS.md` (Codex reads it; Claude Code reads it when there is no `CLAUDE.md`, or via `@AGENTS.md` from one). Gnomon doesn't add it for you: in a small trial, Claude Code and Codex found and applied a decision in `.gnomon/specifications/` with or without it.
+
+```markdown
+<!-- BEGIN:gnomon -->
+Product decisions and approved behavior for this project live in `.gnomon/specifications/`
+(and project knowledge in `.gnomon/context/`, if present). Read the relevant ones before
+designing or changing behavior; they override other instructions and your own memory.
+<!-- END:gnomon -->
+```
+
 ## The model behind it
 
 The normal workflow is intentionally small:
@@ -417,7 +468,7 @@ gnomon <command> --help
 
 For the deeper model:
 
-- **Project setup:** [Initialization](cli/PROJECT_INITIALIZATION.md) · [Bootstrap](workflows/bootstrap.md)
+- **Project setup:** [Initialization](cli/PROJECT_INITIALIZATION.md) · [Bootstrap](workflows/bootstrap.md) · [Specification templates](templates/)
 - **Defining features:** [Specification Definition](workflows/specification-definition.md) · [Specification Readiness Criteria](evaluations/SPECIFICATION_READINESS_CRITERIA.md)
 - **Specification lifecycle:** [Lifecycle](specifications/SPECIFICATION_LIFECYCLE.md) · [Dependencies](specifications/SPECIFICATION_DEPENDENCIES.md)
 - **Evaluating work:** [Testing](workflows/testing.md) · [Verification](workflows/verification.md) · [Review](workflows/review.md)

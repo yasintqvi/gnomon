@@ -38,6 +38,21 @@ func specPathFor(t *testing.T, dir string) string {
 	return ""
 }
 
+// authorSpec appends one real acceptance criterion to a freshly created Specification — approval
+// refuses a Specification that is still only the unfilled template — and returns the new content.
+func authorSpec(t *testing.T, specPath string) []byte {
+	t.Helper()
+	content, err := os.ReadFile(specPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content = append(content, []byte("\n2. An open task can be marked complete.\n")...)
+	if err := os.WriteFile(specPath, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return content
+}
+
 // TestE2E_ContentRevertedToOlderApprovedVersion_Draft reproduces problem scenario 1 from the
 // task: v1 approved, v2 approved, content reverted to exactly v1 — must be Draft, not
 // re-Approved through the older grant.
@@ -51,10 +66,7 @@ func TestE2E_ContentRevertedToOlderApprovedVersion_Draft(t *testing.T) {
 	}
 	specPath := specPathFor(t, dir)
 
-	v1, err := os.ReadFile(specPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	v1 := authorSpec(t, specPath)
 	if got, out := runGnomonOutput(t, dir, env, "approve", "SPEC-001"); got != 0 {
 		t.Fatalf("approve v1 exit %d: %s", got, out)
 	}
@@ -93,10 +105,7 @@ func TestE2E_RevokingLatestNeverResurrectsOlderApproval(t *testing.T) {
 	}
 	specPath := specPathFor(t, dir)
 
-	v1, err := os.ReadFile(specPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	v1 := authorSpec(t, specPath)
 	if got, out := runGnomonOutput(t, dir, env, "approve", "SPEC-001"); got != 0 {
 		t.Fatalf("approve v1 exit %d: %s", got, out)
 	}

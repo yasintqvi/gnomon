@@ -13,7 +13,7 @@ import (
 func setupLayout(t *testing.T) project.Layout {
 	t.Helper()
 	root := t.TempDir()
-	if err := project.Materialize(root); err != nil {
+	if err := project.Materialize(root, false); err != nil {
 		t.Fatal(err)
 	}
 	return project.Layout{Root: root}

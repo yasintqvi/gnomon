@@ -2,8 +2,6 @@ package orchestrate
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"gnomon/internal/approval"
 	"gnomon/internal/contract"
@@ -40,9 +38,9 @@ func SpecActions(l project.Layout, id string) ([]SpecAction, []string, error) {
 		return nil, nil, err
 	}
 
-	defineWf, defineErr := contract.Load(filepath.Join(l.WorkflowsDir(), "specification-definition.md"))
-	implWf, implErr := contract.Load(filepath.Join(l.WorkflowsDir(), "implementation.md"))
-	testWf, testErr := contract.Load(filepath.Join(l.WorkflowsDir(), "testing.md"))
+	defineWf, defineErr := loadWorkflowContract(l, "specification-definition.md")
+	implWf, implErr := loadWorkflowContract(l, "implementation.md")
+	testWf, testErr := loadWorkflowContract(l, "testing.md")
 
 	var unreadable []string
 	var actions []SpecAction
@@ -138,6 +136,7 @@ type SpecDetail struct {
 	Unreadable   []string
 	Revisions    []approval.Revision // oldest first
 	Placeholders []string            // remaining template placeholders (see specs.RemainingPlaceholders); nil if none or the template is missing/unreadable
+	Note         string              // lifecycleNote: why it is Draft (never approved, revoked, changed since approval), or an approved-but-empty warning
 }
 
 // ListSpecsForRoot locates the project at root and returns ListSpecs's result — the entry point
@@ -197,8 +196,9 @@ func SpecDetailFor(l project.Layout, id string) (*SpecDetail, error) {
 		Actions:     actions,
 		Unreadable:  unreadable,
 		Revisions:   revisions,
+		Note:        lifecycleNote(l, id, lifecycle),
 	}
-	if template, tmplErr := os.ReadFile(filepath.Join(l.SpecificationsDir(), "SPEC-000-use-case-name.md")); tmplErr == nil {
+	if template := specs.ClosestTemplate(l.SpecTemplateCandidates(), content, specs.Identity(id)); template != nil {
 		detail.Placeholders = specs.RemainingPlaceholders(template, content)
 	}
 	if lifecycle == approval.Approved {
