@@ -12,6 +12,7 @@ import (
 	"gnomon/internal/present"
 	"gnomon/internal/project"
 	"gnomon/internal/result"
+	"gnomon/internal/specs"
 )
 
 // targetKind is invocation-shape configuration fixed per command, never derived from a workflow's
@@ -49,7 +50,7 @@ func Implement(root, specID, agentOverride string, chooser AgentChooser) (*prese
 // implementWithHandoff is Implement's sibling for the interactive finding-resolution loop
 // (cmd/gnomon, via RunResolutionWorkflow), the only caller that supplies a non-empty handoff.
 func implementWithHandoff(root, specID string, handoff ResolutionHandoff, agentOverride string, chooser AgentChooser) (*present.Report, error) {
-	l, wf, elig, err := prepareImplementation(root, specID)
+	l, wf, workflowPath, elig, err := prepareImplementation(root, specID)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +68,6 @@ func implementWithHandoff(root, specID string, handoff ResolutionHandoff, agentO
 		}, fmt.Errorf("ineligible: %s", elig.Reason)
 	}
 
-	workflowPath := filepath.Join(l.WorkflowsDir(), "implementation.md")
 	rep, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetSpec, target: specID, handoff: handoff, agentOverride: agentOverride, chooser: chooser})
 	return rep, err
 }
@@ -248,60 +248,87 @@ func targetKindFor(wf contract.Workflow) targetKind {
 	return targetSpec
 }
 
-// resolveWorkflowByIdentity scans every workflow file for the one whose declared Contract
-// identity matches. A file that fails to load is silently excluded (cli/WORKFLOW_CONTRACT.md).
-// More than one file declaring the same identity is refused outright.
+// resolveWorkflowByIdentity finds the workflow in effect (bundled, or the project's own) whose
+// declared Contract identity matches. A file that fails to load is silently excluded
+// (cli/WORKFLOW_CONTRACT.md). More than one file declaring the same identity is refused outright.
 func resolveWorkflowByIdentity(l project.Layout, identity string) (contract.Workflow, string, error) {
-	entries, err := os.ReadDir(l.WorkflowsDir())
+	all, _, err := l.Workflows()
 	if err != nil {
 		return contract.Workflow{}, "", err
 	}
 
-	type match struct {
-		wf   contract.Workflow
-		path string
-	}
-	var matches []match
-	for _, e := range entries {
-		if e.IsDir() || filepath.Ext(e.Name()) != ".md" {
-			continue
-		}
-		path := filepath.Join(l.WorkflowsDir(), e.Name())
-		wf, err := contract.Load(path)
+	var matches []project.WorkflowFile
+	var matched contract.Workflow
+	for _, f := range all {
+		wf, err := contract.Parse(f.Data, f.Name)
 		if err != nil {
-			continue // unreadable or invalid Contract metadata — excluded from routing
+			continue // invalid Contract metadata — excluded from routing
 		}
 		if wf.Identity == identity {
-			matches = append(matches, match{wf, path})
+			matches = append(matches, f)
+			matched = wf
 		}
 	}
 	switch len(matches) {
 	case 0:
-		return contract.Workflow{}, "", fmt.Errorf("no workflow with identity %q found in %s", identity, l.WorkflowsDir())
+		return contract.Workflow{}, "", fmt.Errorf("no workflow with identity %q (bundled or in %s)", identity, l.WorkflowsDir())
 	case 1:
-		return matches[0].wf, matches[0].path, nil
+		path, err := readableWorkflowPath(l, matches[0])
+		if err != nil {
+			return contract.Workflow{}, "", err
+		}
+		return matched, path, nil
 	default:
 		return contract.Workflow{}, "", fmt.Errorf("multiple workflow files declare identity %q — refusing to route to either until resolved", identity)
 	}
 }
 
+// loadWorkflowContract parses the Contract of the workflow in effect under filename, without
+// writing anything.
+func loadWorkflowContract(l project.Layout, filename string) (contract.Workflow, error) {
+	f, err := l.Workflow(filename)
+	if err != nil {
+		return contract.Workflow{}, err
+	}
+	return contract.Parse(f.Data, filename)
+}
+
+// readableWorkflowPath returns a path the Agent can read the workflow from: the project's own file
+// when customized, otherwise the current bundled version written to the gitignored runtime
+// directory (refreshed on every run, so it can never go stale).
+func readableWorkflowPath(l project.Layout, f project.WorkflowFile) (string, error) {
+	if f.Customized() {
+		return f.ProjectPath, nil
+	}
+	dir, err := result.TransientDir(l.Root)
+	if err != nil {
+		return "", err
+	}
+	dir = filepath.Join(dir, "workflows")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, f.Name)
+	return path, os.WriteFile(path, f.Data, 0o644)
+}
+
 // prepareImplementation is a thin, Implementation-specific convenience over prepareWorkflow and
 // facts.Eligible.
-func prepareImplementation(root, specID string) (project.Layout, contract.Workflow, facts.Eligibility, error) {
-	l, wf, _, err := prepareWorkflow(root, "implementation.md")
+func prepareImplementation(root, specID string) (project.Layout, contract.Workflow, string, facts.Eligibility, error) {
+	l, wf, path, err := prepareWorkflow(root, "implementation.md")
 	if err != nil {
-		return project.Layout{}, contract.Workflow{}, facts.Eligibility{}, err
+		return project.Layout{}, contract.Workflow{}, "", facts.Eligibility{}, err
 	}
 	elig, err := facts.Eligible(l, wf, specID)
 	if err != nil {
-		return project.Layout{}, contract.Workflow{}, facts.Eligibility{}, err
+		return project.Layout{}, contract.Workflow{}, "", facts.Eligibility{}, err
 	}
-	return l, wf, elig, nil
+	return l, wf, path, elig, nil
 }
 
 // prepareWorkflow resolves project location, contract-version compatibility, and the named
-// workflow's own Contract, plus the exact path it was loaded from — a workflow's path can never be
-// reconstructed from its identity alone (cli/WORKFLOW_CONTRACT.md). Shared by every caller.
+// workflow in effect (the project's customization, or the bundled version), returning its Contract
+// and a path the Agent can read it from. Shared by every caller.
 func prepareWorkflow(root, filename string) (project.Layout, contract.Workflow, string, error) {
 	l, err := project.Locate(root)
 	if err != nil {
@@ -316,8 +343,19 @@ func prepareWorkflow(root, filename string) (project.Layout, contract.Workflow, 
 		return project.Layout{}, contract.Workflow{}, "", fmt.Errorf("project contract version %q is not supported by this CLI (supports %q)", v, project.SupportedContractVersion)
 	}
 
-	workflowPath := filepath.Join(l.WorkflowsDir(), filename)
-	wf, err := contract.Load(workflowPath)
+	f, err := l.Workflow(filename)
+	if err != nil {
+		return project.Layout{}, contract.Workflow{}, "", err
+	}
+	label := filename
+	if f.Customized() {
+		label = f.ProjectPath
+	}
+	wf, err := contract.Parse(f.Data, label)
+	if err != nil {
+		return project.Layout{}, contract.Workflow{}, "", err
+	}
+	workflowPath, err := readableWorkflowPath(l, f)
 	if err != nil {
 		return project.Layout{}, contract.Workflow{}, "", err
 	}
@@ -325,10 +363,16 @@ func prepareWorkflow(root, filename string) (project.Layout, contract.Workflow, 
 }
 
 // implementWithAdapter is a thin, Implementation-specific convenience over execute, used directly
-// by tests against a fake Adapter. Its workflowPath is fixed since it is hardcoded to
-// Implementation, not a generic dispatcher.
+// by tests against a fake Adapter.
 func implementWithAdapter(root string, l project.Layout, wf contract.Workflow, specID string, ad adapter.Adapter) (*present.Report, error) {
-	workflowPath := filepath.Join(l.WorkflowsDir(), "implementation.md")
+	f, err := l.Workflow("implementation.md")
+	if err != nil {
+		return nil, err
+	}
+	workflowPath, err := readableWorkflowPath(l, f)
+	if err != nil {
+		return nil, err
+	}
 	rep, _, err := execute(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetSpec, target: specID, adapter: ad})
 	return rep, err
 }
@@ -380,6 +424,9 @@ func execute(req runRequest) (rep *present.Report, outcome *result.Outcome, err 
 	if failureRep != nil {
 		rep, outcome = failureRep, nil
 		return
+	}
+	if req.wf.Identity == verificationIdentity {
+		enforceEvidence(outcome)
 	}
 	rep, err = classifyAndRender(req.wf, req.target, detail, outcome)
 	return
@@ -497,8 +544,14 @@ func obtainOutcomeUnguarded(req runRequest, runID string) (*result.Outcome, []st
 	switch req.kind {
 	case targetSpec:
 		ctx.SpecIdentity = req.target
+		if ok, path, err := specs.Exists(req.l.SpecificationsDir(), specs.Identity(req.target)); err == nil && ok {
+			ctx.SpecPath = relToRoot(req.l, path)
+		}
 	case targetGeneric:
 		ctx.Target = req.target
+	}
+	if knowledge, err := req.l.KnowledgeFiles(); err == nil {
+		ctx.Knowledge = knowledge
 	}
 	ctx.Handoff = req.handoff.adapterHandoff()
 
@@ -569,8 +622,12 @@ func classifyAndRender(wf contract.Workflow, target string, detail []string, out
 	case "blocked":
 		rep.Outcome = present.Blocked
 	}
-	rep.Summary = humanizeTerminalValue(outcome.Terminal)
-	rep.Sections = renderPayloadSections(wf.Result, outcome.Payload)
+	if wf.Identity == verificationIdentity {
+		renderVerification(rep, outcome.Payload)
+	} else {
+		rep.Summary = humanizeTerminalValue(outcome.Terminal)
+		rep.Sections = renderPayloadSections(wf.Result, outcome.Payload)
+	}
 
 	if rep.Outcome != present.Success {
 		return rep, fmt.Errorf("workflow reported %s", outcome.Terminal)

@@ -54,7 +54,7 @@ func TestSpecDefine_MapsToSpecificationDefinition(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -156,7 +156,7 @@ func TestTest_DraftSpecificationBlocksBeforeAgentResolution(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	// SPEC-001 remains Draft — never approved.
@@ -206,7 +206,7 @@ func TestSpecDefine_ReadyForApprovalNeverGrantsApproval(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 

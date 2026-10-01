@@ -1,5 +1,21 @@
 # Core Distribution / Consumption — CLI Step 2
 
+> **Revision (October 2026) — supersedes the materialization parts of this document.**
+> Workflows and Specification templates are no longer copied into projects. They are read from
+> the binary, and a run writes the workflow it uses to `.gnomon-runtime/workflows/`, so the CLI and
+> the Agent still consume exactly the same bytes from a real file. A file in `.gnomon/workflows/`
+> replaces the bundled workflow of the same name once it differs from every version Gnomon has
+> shipped (fingerprints generated from git history by `tools/stockgen`); an unmodified copy left by
+> an older `gnomon init` is ignored, which removes the drift where projects kept running stale
+> workflows after `gnomon update`. Additional project workflows work as before.
+> `gnomon init` creates only `specifications/`, `approvals/`, and `CONTRACT_VERSION`;
+> `gnomon init --full` still creates the optional knowledge, design, contract, evaluation, and ADR
+> templates. Unmodified templates are never handed to the Agent as project knowledge.
+> Trade-off accepted: unless a project customizes a workflow, its workflow text follows the
+> installed Gnomon version rather than the repository, so two people on different versions can run
+> different instructions against the same Specifications, approvals, and knowledge — all of which
+> remain in the repository.
+
 ## Purpose
 
 Define where Gnomon Core lives relative to the CLI and a user's project, how the CLI and the Agent come to consume the exact same authoritative Core during a workflow run, and how that arrangement supports customization, portability, and future upgrades without a runtime merge engine.

@@ -273,7 +273,7 @@ func TestVerify_MapsToVerificationWorkflow_NestedResultContract(t *testing.T) {
 		FakeAdapter: &adapter.FakeAdapter{},
 		Payload: map[string]interface{}{
 			"evidence": []interface{}{
-				map[string]interface{}{"obligation": "All tests pass", "result": "PASS"},
+				map[string]interface{}{"obligation": "All tests pass", "result": "PASS", "evidence": "go test ./... passed"},
 			},
 			"summary": map[string]interface{}{"aggregate": "PASS", "obligations_evaluated": "1 of 1"},
 		},
@@ -439,6 +439,9 @@ func TestRunTargetedWorkflow_IneligibleNeverResolvesAgent(t *testing.T) {
 		"  terminal_path: outcome\n  classification:\n    OK: success\n  schema:\n    type: object\n" +
 		"    required: [outcome]\n    properties:\n      outcome:\n        type: string\n        enum: [OK]\n" +
 		"---\n# Synthetic\n"
+	if err := os.MkdirAll(l.WorkflowsDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(l.WorkflowsDir(), "synthetic-gated.md"), []byte(synthetic), 0o644); err != nil {
 		t.Fatal(err)
 	}

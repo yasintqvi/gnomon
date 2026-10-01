@@ -129,24 +129,14 @@ func Slugify(s string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-// CreateDraft copies the Specification template, substituting only the identity and display
-// title — never generating behavioral content — under a name built from slug. slug must already
-// be normalized (Slugify) by the caller; CreateDraft performs no semantic judgment of its own.
-func CreateDraft(specsDir string, id Identity, title, slug string) (string, error) {
+// CreateDraft writes a new Draft from template, substituting only the identity and display title —
+// never generating behavioral content — under a name built from slug. slug must already be
+// normalized (Slugify) by the caller; CreateDraft performs no semantic judgment of its own.
+func CreateDraft(specsDir string, id Identity, title, slug string, template []byte) (string, error) {
 	if slug == "" {
 		return "", fmt.Errorf("a non-empty slug is required")
 	}
-	templatePath := filepath.Join(specsDir, "SPEC-000-use-case-name.md")
-	data, err := os.ReadFile(templatePath)
-	if err != nil {
-		return "", fmt.Errorf("reading specification template: %w", err)
-	}
-
-	numeric := strings.TrimPrefix(string(id), "SPEC-")
-	content := string(data)
-	content = strings.ReplaceAll(content, "[ID]", numeric)
-	content = strings.ReplaceAll(content, "[Use Case Name]", title)
-	content = strings.ReplaceAll(content, "[Use case name]", title)
+	content := renderTemplate(template, id, title)
 
 	filename := fmt.Sprintf("%s-%s.md", id, slug)
 	destPath := filepath.Join(specsDir, filename)
@@ -157,6 +147,59 @@ func CreateDraft(specsDir string, id Identity, title, slug string) (string, erro
 		return "", err
 	}
 	return destPath, nil
+}
+
+// renderTemplate applies Draft Creation's only substitutions: the identity's number and the title.
+func renderTemplate(template []byte, id Identity, title string) string {
+	numeric := strings.TrimPrefix(string(id), "SPEC-")
+	content := string(template)
+	content = strings.ReplaceAll(content, "[ID]", numeric)
+	content = strings.ReplaceAll(content, "[Use Case Name]", title)
+	content = strings.ReplaceAll(content, "[Use case name]", title)
+	return content
+}
+
+// AuthoredLines returns the non-blank lines of spec that a freshly created Draft from template
+// would not contain — what someone actually wrote. Structural lines (separators, bare list
+// markers) never count.
+func AuthoredLines(template, spec []byte, id Identity) []string {
+	rendered := map[string]bool{}
+	for _, line := range strings.Split(renderTemplate(template, id, Title(id, spec)), "\n") {
+		rendered[strings.TrimSpace(line)] = true
+	}
+	var authored []string
+	for _, line := range strings.Split(string(spec), "\n") {
+		t := strings.TrimSpace(line)
+		if t == "" || rendered[t] || strings.Trim(t, "-*#=_|: ") == "" {
+			continue
+		}
+		authored = append(authored, t)
+	}
+	return authored
+}
+
+// EffectivelyEmpty reports whether spec contains nothing beyond what Draft Creation would have
+// produced from at least one of the given templates — approving it would approve no behavior.
+func EffectivelyEmpty(templates [][]byte, spec []byte, id Identity) bool {
+	for _, t := range templates {
+		if len(AuthoredLines(t, spec, id)) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// ClosestTemplate returns the template with the fewest authored lines relative to spec — the one
+// it was most likely created from — or nil if templates is empty.
+func ClosestTemplate(templates [][]byte, spec []byte, id Identity) []byte {
+	var best []byte
+	bestN := -1
+	for _, t := range templates {
+		if n := len(AuthoredLines(t, spec, id)); bestN < 0 || n < bestN {
+			best, bestN = t, n
+		}
+	}
+	return best
 }
 
 var titleHeadingPattern = regexp.MustCompile(`^#\s*SPEC-\S+\s*[—–-]\s*(.+?)\s*$`)
@@ -176,9 +219,8 @@ func Title(id Identity, content []byte) string {
 	return string(id)
 }
 
-// substitutedTemplateTokens are the literal tokens CreateDraft itself replaces when creating a
-// Specification — copied from CreateDraft's own replacements, not guessed. CreateDraft is left
-// unchanged; this list must be kept in sync with it by hand if that ever changes.
+// substitutedTemplateTokens are the literal tokens renderTemplate itself replaces when creating a
+// Specification; keep in sync with it.
 var substitutedTemplateTokens = map[string]bool{
 	"[ID]":            true,
 	"[Use Case Name]": true,

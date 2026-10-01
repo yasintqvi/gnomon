@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"gnomon/internal/approval"
 	"gnomon/internal/facts"
 	"gnomon/internal/gitutil"
 	"gnomon/internal/present"
@@ -52,7 +53,11 @@ func Status(root string) (*present.Report, error) {
 		if err != nil {
 			return nil, err
 		}
-		specLines = append(specLines, fmt.Sprintf("%s: %s", id, lifecycle))
+		line := fmt.Sprintf("%s: %s", id, lifecycle)
+		if note := lifecycleNote(l, string(id), lifecycle); note != "" {
+			line += " — " + note
+		}
+		specLines = append(specLines, line)
 	}
 	specBody := "No Specifications exist yet."
 	if len(specLines) > 0 {
@@ -82,4 +87,80 @@ func Status(root string) (*present.Report, error) {
 	}
 
 	return rep, nil
+}
+
+// lifecycleNote explains a Specification's derived state using only existing approval evidence:
+// whether a Draft was never approved, had its approval revoked, or changed after approval (with
+// how many lines differ from the approved text), and whether its content is still only the
+// unfilled template. "" when there is nothing to add.
+func lifecycleNote(l project.Layout, id string, lifecycle approval.Lifecycle) string {
+	content, err := specs.ReadContent(l.SpecificationsDir(), specs.Identity(id))
+	if err != nil {
+		return ""
+	}
+	empty := specs.EffectivelyEmpty(l.SpecTemplateCandidates(), content, specs.Identity(id))
+
+	if lifecycle == approval.Approved {
+		if empty {
+			return "approved, but contains only the unfilled template"
+		}
+		return ""
+	}
+
+	var note string
+	revisions, err := approval.Revisions(l.ApprovalsDir(), id)
+	switch {
+	case err != nil || len(revisions) == 0:
+		note = "never approved"
+	case revisions[len(revisions)-1].Revoked:
+		note = "approval revoked"
+	default:
+		latest := revisions[len(revisions)-1]
+		note = "changed since approval"
+		if date := approvalDate(latest.ApprovedAt); date != "" {
+			note += " on " + date
+		}
+		if latest.ContentKnown {
+			note += fmt.Sprintf(" (%d line(s) changed)", changedLines(latest.Content, string(content)))
+		}
+	}
+	if empty {
+		note += "; unfilled template"
+	}
+	return note
+}
+
+// approvalDate returns the YYYY-MM-DD part of a grant timestamp, or "" if it has none.
+func approvalDate(ts string) string {
+	if len(ts) >= 10 {
+		return ts[:10]
+	}
+	return ""
+}
+
+// changedLines approximates how many non-blank lines changed between the approved and current
+// text — the larger of lines removed and lines added — as a size hint, not a diff.
+func changedLines(approved, current string) int {
+	count := func(s string) map[string]int {
+		m := map[string]int{}
+		for _, line := range strings.Split(s, "\n") {
+			if t := strings.TrimSpace(line); t != "" {
+				m[t]++
+			}
+		}
+		return m
+	}
+	a, c := count(approved), count(current)
+	removed, added := 0, 0
+	for line, k := range a {
+		if d := k - c[line]; d > 0 {
+			removed += d
+		}
+	}
+	for line, k := range c {
+		if d := k - a[line]; d > 0 {
+			added += d
+		}
+	}
+	return max(removed, added)
 }

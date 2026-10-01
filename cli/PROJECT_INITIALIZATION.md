@@ -1,5 +1,17 @@
 # Project Initialization Model — CLI Step 3
 
+> **Revision (October 2026) — supersedes "Materialization" and the layout below.** A plain
+> `gnomon init` now creates only `.gnomon/specifications/`, `.gnomon/approvals/`, and
+> `CONTRACT_VERSION`; nothing is copied. Workflows and the Specification templates (short default,
+> `--detailed` for the full use-case template) are read from the binary — see the revision note in
+> [`CORE_DISTRIBUTION.md`](CORE_DISTRIBUTION.md). `gnomon init --full` additionally creates the
+> templates older versions created by default (context and design documents, contracts,
+> evaluation criteria, the ADR template, the lifecycle and dependency documents), still writing only
+> what is absent. An initialized project is one with `CONTRACT_VERSION` plus the two directories.
+> Existing projects need no migration: their copied workflows are recognized as unmodified copies
+> and ignored, an edited copy stays in effect, and their own edited `SPEC-000` template keeps being
+> used for new Specifications.
+
 ## Purpose
 
 Define exactly what `gnomon init` does, creates, validates, and leaves behind, and the precise, mechanically checkable definition of an "initialized" Gnomon project.

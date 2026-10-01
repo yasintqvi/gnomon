@@ -57,7 +57,7 @@ func TestStatus_DraftSpecification(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -132,10 +132,10 @@ func TestStatus_MultipleSpecifications_AllListedNoCurrentSpecChosen(t *testing.T
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Email Verification"); err != nil {
+	if _, err := specCreateDefined(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-002", nil, nil); err != nil {
@@ -186,7 +186,7 @@ func TestStatus_NotAGitRepository_SpecStateStillReported_GitFinalizationNotAppli
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -214,7 +214,7 @@ func TestStatus_UnexpectedGitFailure_PreservesSpecState_NotMisclassifiedAsNoRepo
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	// Corrupt the index so `git rev-parse --git-dir` still succeeds (it is still a Git
@@ -344,6 +344,9 @@ func TestStatus_DiffersFromValidate_DoesNotAuditContracts(t *testing.T) {
 		"  terminal_path: outcome\n  classification:\n    OK: success\n  schema:\n    type: object\n" +
 		"    required: [outcome]\n    properties:\n      outcome:\n        type: string\n        enum: [OK]\n" +
 		"---\n# Duplicate\n"
+	if err := os.MkdirAll(l.WorkflowsDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(l.WorkflowsDir(), "bootstrap-copy.md"), []byte(duplicate), 0o644); err != nil {
 		t.Fatal(err)
 	}

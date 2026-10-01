@@ -56,6 +56,12 @@ func Load(path string) (Workflow, error) {
 	if err != nil {
 		return Workflow{}, err
 	}
+	return Parse(data, path)
+}
+
+// Parse reads and validates a workflow's Contract from its file content; label names the source
+// in error messages.
+func Parse(data []byte, path string) (Workflow, error) {
 	fm, err := splitFrontmatter(data)
 	if err != nil {
 		return Workflow{}, fmt.Errorf("%s: %w", path, err)

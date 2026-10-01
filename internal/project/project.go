@@ -23,10 +23,14 @@ const SupportedContractVersion = "1"
 // GnomonDirName is the materialized Core root inside a project.
 const GnomonDirName = ".gnomon"
 
-// bundledSections are the canonical layout subdirectories materialized from the bundle.
-var bundledSections = []string{"workflows", "specifications", "evaluations", "contracts", "decisions", "context"}
+// fullSections are the optional reference and knowledge templates `gnomon init --full`
+// materializes. A plain init creates none of them: workflows and Specification templates are read
+// from the binary, and project knowledge is written only when there is something to record.
+var fullSections = []string{"specifications", "evaluations", "contracts", "decisions", "context"}
 
-// Layout resolves paths within a located Gnomon project.
+// requiredSections are the only .gnomon/ subdirectories every project must have.
+var requiredSections = []string{"specifications", "approvals"}
+
 type Layout struct {
 	Root string
 }
@@ -80,12 +84,11 @@ func (l Layout) IsInitialized() bool {
 	return err == nil && v != ""
 }
 
-// MissingSections reports which canonical .gnomon/ subdirectories are absent (`gnomon validate`'s
-// structural check), reusing the same layout knowledge Materialize fills from.
+// MissingSections reports which required .gnomon/ subdirectories are absent (`gnomon validate`'s
+// structural check). Workflows, knowledge, and templates are optional.
 func (l Layout) MissingSections() []string {
-	sections := append(append([]string{}, bundledSections...), "approvals")
 	var missing []string
-	for _, section := range sections {
+	for _, section := range requiredSections {
 		info, err := os.Stat(filepath.Join(l.GnomonRoot(), section))
 		if err != nil || !info.IsDir() {
 			missing = append(missing, section)
@@ -94,10 +97,11 @@ func (l Layout) MissingSections() []string {
 	return missing
 }
 
-// Materialize fills any missing part of the canonical layout at root/.gnomon, never overwriting
-// existing content, and writes CONTRACT_VERSION last. It refuses if an existing, unsupported
-// contract version is already present.
-func Materialize(root string) error {
+// Materialize creates the minimal .gnomon/ layout at root — specifications/, approvals/, and
+// CONTRACT_VERSION — never overwriting existing content. With full, it also copies the optional
+// reference and knowledge templates (fullSections), again only where absent. It refuses if an
+// existing, unsupported contract version is already present.
+func Materialize(root string, full bool) error {
 	l := Layout{Root: root}
 
 	if v, err := l.ContractVersion(); err != nil {
@@ -106,17 +110,21 @@ func Materialize(root string) error {
 		return fmt.Errorf("project contract version %q is not supported by this CLI (supports %q)", v, SupportedContractVersion)
 	}
 
-	if err := os.MkdirAll(l.ApprovalsDir(), 0o755); err != nil {
-		return err
-	}
-
-	for _, section := range bundledSections {
-		dest := filepath.Join(l.GnomonRoot(), section)
-		if err := os.MkdirAll(dest, 0o755); err != nil {
+	for _, dir := range []string{l.ApprovalsDir(), l.SpecificationsDir()} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}
-		if err := fillFromBundle(section, dest); err != nil {
-			return err
+	}
+
+	if full {
+		for _, section := range fullSections {
+			dest := filepath.Join(l.GnomonRoot(), section)
+			if err := os.MkdirAll(dest, 0o755); err != nil {
+				return err
+			}
+			if err := fillFromBundle(section, dest); err != nil {
+				return err
+			}
 		}
 	}
 

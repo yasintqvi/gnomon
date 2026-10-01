@@ -51,6 +51,11 @@ Core defines only the ordering and gating constraints its own text actually stat
 
 ## New-Project Journey
 
+> **Revision (October 2026).** `gnomon init` now points straight to `gnomon spec`; Initial
+> Knowledge Establishment (`gnomon describe`) and Bootstrap remain available but optional, and
+> `describe` records a short `.gnomon/context/PROJECT.md` instead of filling a set of templates.
+> See [`PROJECT_INITIALIZATION.md`](PROJECT_INITIALIZATION.md).
+
 ```text
 gnomon init
      ↓

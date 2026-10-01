@@ -42,13 +42,13 @@ func TestList_EmptyDir_ExcludesTemplate(t *testing.T) {
 
 func TestList_ReturnsAllIdentitiesInOrder(t *testing.T) {
 	dir := setupSpecsDir(t)
-	if _, err := CreateDraft(dir, "SPEC-002", "Second", Slugify("Second")); err != nil {
+	if _, err := CreateDraft(dir, "SPEC-002", "Second", Slugify("Second"), []byte(templateFixture)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateDraft(dir, "SPEC-001", "First", Slugify("First")); err != nil {
+	if _, err := CreateDraft(dir, "SPEC-001", "First", Slugify("First"), []byte(templateFixture)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateDraft(dir, "SPEC-003", "Third", Slugify("Third")); err != nil {
+	if _, err := CreateDraft(dir, "SPEC-003", "Third", Slugify("Third"), []byte(templateFixture)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -117,7 +117,7 @@ func TestExists(t *testing.T) {
 
 func TestCreateDraft_SubstitutesOnlyIdentityAndTitle(t *testing.T) {
 	dir := setupSpecsDir(t)
-	path, err := CreateDraft(dir, "SPEC-004", "Password Reset", Slugify("Password Reset"))
+	path, err := CreateDraft(dir, "SPEC-004", "Password Reset", Slugify("Password Reset"), []byte(templateFixture))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,17 +142,17 @@ func TestCreateDraft_SubstitutesOnlyIdentityAndTitle(t *testing.T) {
 
 func TestCreateDraft_RefusesToOverwriteExisting(t *testing.T) {
 	dir := setupSpecsDir(t)
-	if _, err := CreateDraft(dir, "SPEC-004", "Password Reset", Slugify("Password Reset")); err != nil {
+	if _, err := CreateDraft(dir, "SPEC-004", "Password Reset", Slugify("Password Reset"), []byte(templateFixture)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateDraft(dir, "SPEC-004", "Password Reset", Slugify("Password Reset")); err == nil {
+	if _, err := CreateDraft(dir, "SPEC-004", "Password Reset", Slugify("Password Reset"), []byte(templateFixture)); err == nil {
 		t.Fatalf("expected an error when the destination file already exists")
 	}
 }
 
 func TestCreateDraft_RefusesEmptySlug(t *testing.T) {
 	dir := setupSpecsDir(t)
-	if _, err := CreateDraft(dir, "SPEC-004", "Password Reset", ""); err == nil {
+	if _, err := CreateDraft(dir, "SPEC-004", "Password Reset", "", []byte(templateFixture)); err == nil {
 		t.Fatalf("expected an empty slug to be refused")
 	}
 }
@@ -182,7 +182,7 @@ func TestTitle_FallsBackToIdentity_WhenHeadingMissingOrMalformed(t *testing.T) {
 
 func realTemplate(t *testing.T) []byte {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "specifications", "SPEC-000-use-case-name.md"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "templates", "spec-detailed.md"))
 	if err != nil {
 		t.Fatalf("reading real repository template: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestRemainingPlaceholders_FreshDraftFromRealTemplate(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "SPEC-000-use-case-name.md"), template, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	path, err := CreateDraft(dir, "SPEC-001", "Mark a task complete", Slugify("Mark a task complete"))
+	path, err := CreateDraft(dir, "SPEC-001", "Mark a task complete", Slugify("Mark a task complete"), template)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestRemainingPlaceholders_FullyDefinedSpec_NoPlaceholders(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "SPEC-000-use-case-name.md"), template, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	path, err := CreateDraft(dir, "SPEC-001", "Mark a task complete", Slugify("Mark a task complete"))
+	path, err := CreateDraft(dir, "SPEC-001", "Mark a task complete", Slugify("Mark a task complete"), template)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,5 +282,81 @@ func TestRemainingPlaceholders_CustomTemplate_DetectsItsOwnPlaceholders(t *testi
 	remaining := RemainingPlaceholders(template, spec)
 	if len(remaining) != 2 || remaining[0] != "[Custom Field]" || remaining[1] != "[Another Field]" {
 		t.Fatalf("expected both custom placeholders in order, got %v", remaining)
+	}
+}
+
+func shortTemplate(t *testing.T) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "templates", "spec.md"))
+	if err != nil {
+		t.Fatalf("reading short template: %v", err)
+	}
+	return data
+}
+
+func TestEffectivelyEmpty_FreshDraftFromEitherTemplate(t *testing.T) {
+	for name, template := range map[string][]byte{"short": shortTemplate(t), "detailed": realTemplate(t)} {
+		dir := t.TempDir()
+		path, err := CreateDraft(dir, "SPEC-007", "Mark a task complete", Slugify("Mark a task complete"), template)
+		if err != nil {
+			t.Fatal(err)
+		}
+		spec, _ := os.ReadFile(path)
+		if !EffectivelyEmpty([][]byte{template}, spec, "SPEC-007") {
+			t.Fatalf("%s: a fresh draft must be effectively empty, authored lines: %v", name, AuthoredLines(template, spec, "SPEC-007"))
+		}
+		// Reformatting alone (extra blank lines, trailing spaces) authors nothing.
+		reformatted := strings.ReplaceAll(string(spec), "\n", "  \n\n")
+		if !EffectivelyEmpty([][]byte{template}, []byte(reformatted), "SPEC-007") {
+			t.Fatalf("%s: whitespace-only changes must not count as content", name)
+		}
+	}
+}
+
+func TestEffectivelyEmpty_OneRealCriterionIsContent(t *testing.T) {
+	template := shortTemplate(t)
+	dir := t.TempDir()
+	path, err := CreateDraft(dir, "SPEC-001", "Mark a task complete", Slugify("Mark a task complete"), template)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, _ := os.ReadFile(path)
+	edited := strings.Replace(string(spec), "1. [Given a situation, when something happens, then this is the result.]", "1. An open task can be marked complete.", 1)
+	if EffectivelyEmpty([][]byte{template}, []byte(edited), "SPEC-001") {
+		t.Fatalf("a Specification with a real acceptance criterion is not empty")
+	}
+	if got := AuthoredLines(template, []byte(edited), "SPEC-001"); len(got) != 1 || got[0] != "1. An open task can be marked complete." {
+		t.Fatalf("expected exactly the authored criterion, got %v", got)
+	}
+}
+
+func TestEffectivelyEmpty_ChecksEveryCandidateTemplate(t *testing.T) {
+	// A Specification created from an older project template is still recognized as empty when
+	// that template is among the candidates, even though it doesn't match the bundled ones.
+	legacy := []byte(templateFixture)
+	dir := t.TempDir()
+	path, err := CreateDraft(dir, "SPEC-004", "Submit a Report", Slugify("Submit a Report"), legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, _ := os.ReadFile(path)
+	if EffectivelyEmpty([][]byte{shortTemplate(t)}, spec, "SPEC-004") {
+		t.Fatalf("against an unrelated template, the legacy draft's text counts as authored")
+	}
+	if !EffectivelyEmpty([][]byte{shortTemplate(t), legacy}, spec, "SPEC-004") {
+		t.Fatalf("expected the legacy draft to be recognized as empty against its own template")
+	}
+}
+
+func TestClosestTemplate_PicksTheOriginatingTemplate(t *testing.T) {
+	short, detailed := shortTemplate(t), realTemplate(t)
+	dir := t.TempDir()
+	path, err := CreateDraft(dir, "SPEC-001", "Thing", Slugify("Thing"), detailed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, _ := os.ReadFile(path)
+	if got := ClosestTemplate([][]byte{short, detailed}, spec, "SPEC-001"); string(got) != string(detailed) {
+		t.Fatalf("expected the detailed template to be identified as the origin")
 	}
 }

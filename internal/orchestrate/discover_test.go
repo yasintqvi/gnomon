@@ -185,7 +185,7 @@ func TestDiscoveryLostApprovalsReport_OtherSpecLostApproval_WarningAppended(t *t
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Spec One"); err != nil {
+	if _, err := specCreateDefined(root, "Spec One"); err != nil {
 		t.Fatal(err) // SPEC-001
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -232,7 +232,7 @@ func TestDiscoveryLostApprovalsReport_NothingLost_ReportUnchanged(t *testing.T) 
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Spec One"); err != nil {
+	if _, err := specCreateDefined(root, "Spec One"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {

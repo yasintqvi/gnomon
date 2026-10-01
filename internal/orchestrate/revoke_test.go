@@ -21,7 +21,7 @@ func TestRevoke_ApprovedBecomesNonApproved(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -67,7 +67,7 @@ func TestRevoke_NextRecommendsSpecWorkspace(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -93,7 +93,7 @@ func TestRevoke_LegacyDuplicateGrants_RevokesAllAndDerivesDraft(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -175,7 +175,7 @@ func TestRevoke_ThenApproveAgain_ThenRevokeAgain(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -222,7 +222,7 @@ func TestRevoke_SpecificationContentUnmodified(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -257,10 +257,10 @@ func TestRevoke_UnrelatedGrantsUntouched(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Email Verification"); err != nil {
+	if _, err := specCreateDefined(root, "Email Verification"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -311,7 +311,7 @@ func TestRevoke_GrantFileItselfUntouched(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -383,7 +383,7 @@ func TestRevoke_DraftNeverApproved_NoActiveApprovalToRevoke(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -405,7 +405,7 @@ func TestRevoke_StaleFingerprint_NoActiveApprovalToRevoke(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -448,7 +448,7 @@ func TestRevoke_Repeated_SameDeterministicBlockedResult(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -492,7 +492,7 @@ func TestRevoke_MalformedGrantIsExcludedNotSilentlyRepaired(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -535,7 +535,7 @@ func TestRevoke_RefusesWhenNoIdentityIsAvailable(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {

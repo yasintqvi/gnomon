@@ -280,7 +280,7 @@ func TestSpecGuard_SpecificationDefinitionEditsDraftTarget_AcceptedAsToday(t *te
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -347,7 +347,7 @@ func TestSpecGuard_AgentFailsWithoutResult_StillRestoredAndRejected(t *testing.T
 
 func TestSpecGuard_BothApprovalsAndSpecTampered_OneReportBothRestored(t *testing.T) {
 	root := setupApprovedSpec(t)
-	if _, err := SpecCreate(root, "Email Verification"); err != nil {
+	if _, err := specCreateDefined(root, "Email Verification"); err != nil {
 		t.Fatal(err) // SPEC-002, Draft
 	}
 	l, wf := mustPrepareImplementation(t, root, "SPEC-001")
@@ -406,10 +406,10 @@ func TestRuleB_KnowledgeResolutionEditsApprovedSpec_AcceptedWithWarning(t *testi
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Spec One"); err != nil {
+	if _, err := specCreateDefined(root, "Spec One"); err != nil {
 		t.Fatal(err) // SPEC-001
 	}
-	if _, err := SpecCreate(root, "Spec Two"); err != nil {
+	if _, err := specCreateDefined(root, "Spec Two"); err != nil {
 		t.Fatal(err) // SPEC-002
 	}
 	if _, err := Approve(root, "SPEC-002", nil, nil); err != nil {
@@ -461,7 +461,7 @@ func TestRuleB_KnowledgeResolutionEditsApprovedSpec_AcceptedWithWarning(t *testi
 
 func TestRuleB_ImplementationEditsUnrelatedApprovedSpec_AcceptedWithWarning(t *testing.T) {
 	root := setupApprovedSpec(t) // SPEC-001 Approved
-	if _, err := SpecCreate(root, "Email Verification"); err != nil {
+	if _, err := specCreateDefined(root, "Email Verification"); err != nil {
 		t.Fatal(err) // SPEC-002
 	}
 	if _, err := Approve(root, "SPEC-002", nil, nil); err != nil {

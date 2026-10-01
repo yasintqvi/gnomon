@@ -23,7 +23,7 @@ func TestSpecActions_Draft_DefineAndApproveAvailable_ImplementTestRevokeNot(t *t
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	l, err := project.Locate(root)

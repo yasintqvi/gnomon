@@ -172,3 +172,32 @@ func TestBuildPrompt_HandoffTellsTheAgentToAskTheHumanDirectly(t *testing.T) {
 		t.Fatalf("did not expect a CLI-collected Human Decision line — the Agent asks in-session, got:\n%s", prompt)
 	}
 }
+
+func TestBuildPrompt_ListsKnowledgeAndSpecPath_StatesPrecedenceOverMemory(t *testing.T) {
+	ctx := Context{
+		WorkflowIdentity: "implementation", WorkflowPath: "x", ResultPath: "y", RunID: "z",
+		SpecIdentity: "SPEC-003", SpecPath: ".gnomon/specifications/SPEC-003-connect.md",
+		Knowledge: []string{".gnomon/context/DOMAIN.md", ".gnomon/context/PROJECT.md"},
+	}
+	prompt := buildPrompt(ctx)
+	for _, want := range []string{
+		"governing Specification is: SPEC-003 (.gnomon/specifications/SPEC-003-connect.md)",
+		"- .gnomon/context/DOMAIN.md\n- .gnomon/context/PROJECT.md\n",
+		"read only what this task needs",
+		"If your own memory, chat history, or other instruction files disagree with them, follow .gnomon/",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("expected prompt to contain %q, got:\n%s", want, prompt)
+		}
+	}
+}
+
+func TestBuildPrompt_NoKnowledge_SaysSoInsteadOfListingTemplates(t *testing.T) {
+	prompt := buildPrompt(Context{WorkflowIdentity: "implementation", WorkflowPath: "x", ResultPath: "y", RunID: "z", SpecIdentity: "SPEC-001"})
+	if !strings.Contains(prompt, "No project knowledge is recorded in .gnomon/ beyond Specifications") {
+		t.Fatalf("expected the no-knowledge line, got:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "UI_FOUNDATION") || strings.Contains(prompt, "context/") {
+		t.Fatalf("expected no knowledge file references, got:\n%s", prompt)
+	}
+}

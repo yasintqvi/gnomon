@@ -14,6 +14,7 @@ import (
 	"gnomon/internal/contract"
 	"gnomon/internal/present"
 	"gnomon/internal/project"
+	"gnomon/internal/specs"
 )
 
 func configureGitIdentity(t *testing.T, root string) {
@@ -45,7 +46,7 @@ func sandboxAgentConfig(t *testing.T) {
 // the point it calls ResolveAgent.
 func mustPrepareImplementation(t *testing.T, root, specID string) (project.Layout, contract.Workflow) {
 	t.Helper()
-	l, wf, elig, err := prepareImplementation(root, specID)
+	l, wf, _, elig, err := prepareImplementation(root, specID)
 	if err != nil {
 		t.Fatalf("prepareImplementation: %v", err)
 	}
@@ -63,7 +64,7 @@ func TestFullSlice_InitCreateApproveImplement(t *testing.T) {
 		t.Fatalf("init: %v", err)
 	}
 
-	specReport, err := SpecCreate(root, "Password Reset")
+	specReport, err := specCreateDefined(root, "Password Reset")
 	if err != nil {
 		t.Fatalf("spec create: %v", err)
 	}
@@ -79,7 +80,7 @@ func TestFullSlice_InitCreateApproveImplement(t *testing.T) {
 	// a matching valid result before Run executes — proving the round-trip end to end.
 	scripted := &scriptedAdapter{FakeAdapter: &adapter.FakeAdapter{}}
 
-	l, wf, elig, err := prepareImplementation(root, "SPEC-001")
+	l, wf, _, elig, err := prepareImplementation(root, "SPEC-001")
 	if err != nil {
 		t.Fatalf("prepareImplementation: %v", err)
 	}
@@ -129,7 +130,7 @@ func TestSpecCreate_NextRecommendsSpecWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	report, err := SpecCreate(root, "Password Reset")
+	report, err := specCreateDefined(root, "Password Reset")
 	if err != nil {
 		t.Fatalf("spec create: %v", err)
 	}
@@ -149,7 +150,7 @@ func TestImplement_IneligibleNeverResolvesAgent(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	// SPEC-001 remains Draft — never approved.
@@ -211,7 +212,7 @@ func TestApprove_Twice_WritesOnlyOneGrantAndReportsAlreadyApproved(t *testing.T)
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -272,7 +273,7 @@ func TestApprove_ChangedContent_StillCreatesNewGrant(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -325,7 +326,7 @@ func TestApprove_NextRecommendsSpecWorkspaceAndImplementation(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -357,7 +358,7 @@ func TestSpecWorkspaceNext_NeverHighlightsAnUnavailableAction(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	l, err := project.Locate(root)
@@ -384,7 +385,7 @@ func TestSpecWorkspaceNext_HighlightsAvailableAction(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -416,7 +417,7 @@ func TestApprove_RefusesWhenNoIdentityIsAvailable(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err == nil {
@@ -433,7 +434,7 @@ func setupApprovedSpec(t *testing.T) string {
 	if _, err := Init(root); err != nil {
 		t.Fatalf("init: %v", err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatalf("spec create: %v", err)
 	}
 	if _, err := Approve(root, "SPEC-001", nil, nil); err != nil {
@@ -798,4 +799,27 @@ func TestAgentSetDefault_RefusesInvalidProvider(t *testing.T) {
 	if cfg.DefaultProvider != "" {
 		t.Fatalf("an invalid set-default must never persist, got %q", cfg.DefaultProvider)
 	}
+}
+
+// specCreateDefined is SpecCreate plus one real acceptance criterion, so the Specification can be
+// approved — approval refuses a Specification that is still only the unfilled template.
+func specCreateDefined(root, title string) (*present.Report, error) {
+	rep, err := SpecCreate(root, title)
+	if err != nil {
+		return rep, err
+	}
+	l, err := project.Locate(root)
+	if err != nil {
+		return rep, err
+	}
+	_, path, err := specs.Exists(l.SpecificationsDir(), specs.Identity(rep.Target))
+	if err != nil {
+		return rep, err
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return rep, err
+	}
+	content = append(content, []byte("\n2. "+title+" works as described.\n")...)
+	return rep, os.WriteFile(path, content, 0o644)
 }

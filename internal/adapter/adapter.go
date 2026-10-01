@@ -11,6 +11,11 @@ type Context struct {
 	WorkflowPath     string
 	WorkflowIdentity string
 	SpecIdentity     string // "" when not applicable
+	SpecPath         string // the governing Specification's file, project-relative; "" when not applicable
+
+	// Knowledge lists project-written knowledge files (project-relative), excluding unmodified
+	// Gnomon templates — references only, never content.
+	Knowledge []string
 
 	// Target is a free-form, untyped invocation target (Verification, Review) — never checked as
 	// a Specification (cli/WORKFLOW_CONTRACT.md). Mutually exclusive with SpecIdentity.

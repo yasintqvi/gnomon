@@ -20,7 +20,7 @@ func TestApprove_ContentMatchesOlderNonLatestGrant_WritesNewGrant_Approved(t *te
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	l, err := project.Locate(root)
@@ -83,7 +83,7 @@ func TestApprove_ContentMatchesLatestGrant_NoOp_NothingWritten(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	l, err := project.Locate(root)
@@ -136,7 +136,7 @@ func TestRevoke_OlderMatchingGrantNeverBecomesApprovedAfter(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	l, err := project.Locate(root)
@@ -184,7 +184,7 @@ func TestSpecDetailFor_RevisionStatuses_ActiveRevokedSuperseded(t *testing.T) {
 	if _, err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := SpecCreate(root, "Password Reset"); err != nil {
+	if _, err := specCreateDefined(root, "Password Reset"); err != nil {
 		t.Fatal(err)
 	}
 	l, err := project.Locate(root)
