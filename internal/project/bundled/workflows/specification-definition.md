@@ -45,8 +45,8 @@ Bring a Draft Specification to text the user can approve: its goal, the decision
 
 ## Steps
 
-1. **Read** the Specification as it is now, the project knowledge files listed in your prompt that bear on it, and the code it would touch.
-2. **Find the open decisions**: questions where reasonable answers lead to different behavior — who may do it, edge and failure cases, limits, what happens to existing data or state. Skip anything already decided in `.gnomon/` or by the existing code, and anything that doesn't change behavior.
+1. **Read** the Specification as it is now, the decisions and deferred notes Gnomon extracted from the other Specifications (the file named in your prompt — all of it), the project knowledge files listed in your prompt that bear on it, and the code it would touch.
+2. **Find the open decisions**: questions where reasonable answers lead to different behavior — who may do it, edge and failure cases, limits, what happens to existing data or state. Skip anything already decided in `.gnomon/` or by the existing code, and anything that doesn't change behavior. A deferred note that this request takes up is already decided: record it with its source and the user's earlier answer; ask only if it is unclear whether or how it applies, or if a later-approved statement may have replaced it.
 3. **Ask the user** each open decision directly in this session, a few at a time, with your recommended answer when you have one. Never record your own guess as the user's answer. A decision the user defers stays open.
 4. **Write the Specification** in its existing structure (whichever template it came from). Record each decision once, in its Decisions section (add one if missing), as the question and the user's answer. Do not copy decisions into other files. If a project-wide decision is already recorded in a knowledge file, refer to it instead of restating it.
 5. **Write acceptance criteria**: each one observable behavior that can be checked, together covering the decisions. Remove template placeholders and sections that don't apply. Keep the whole Specification short enough to review in a few minutes.

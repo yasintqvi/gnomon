@@ -334,3 +334,11 @@ func TestBuildPrompt_ScopeNotePassedThroughVerbatim(t *testing.T) {
 		t.Fatal("no scope section when there is no scope note")
 	}
 }
+
+func TestBuildPrompt_ReadFirstFilesListed(t *testing.T) {
+	p := buildPrompt(Context{WorkflowIdentity: "specification-definition", WorkflowPath: "w.md",
+		ReadFirst: []ReadFirstFile{{Path: ".gnomon-runtime/r1.recorded-decisions.md", Purpose: "earlier decisions"}}})
+	if !strings.Contains(p, "Read this file before anything else: .gnomon-runtime/r1.recorded-decisions.md — earlier decisions") {
+		t.Fatalf("expected the read-first file in the prompt:\n%s", p)
+	}
+}

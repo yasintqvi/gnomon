@@ -159,6 +159,7 @@ var stockFingerprints = map[string][]string{
 	},
 	"specification-definition.md": {
 		"6465aec13600161c868a6204246b7eb2e100606a133c6fd1a37e2f541ff57d32",
+		"860088a8fd68384319dec27a61362d450198116b95e85f8d7804bb18c112d795",
 		"aad5da18325b7d4c0dcef76c5cad69d0c79e0a13d17167ec4868426373a37b4c",
 	},
 	"specification-discovery.md": {

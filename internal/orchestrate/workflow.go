@@ -602,6 +602,16 @@ func obtainOutcomeUnguarded(req runRequest, runID string) (*result.Outcome, []st
 		ctx.Target = req.target
 	}
 	ctx.ScopeNote = req.scopeNote
+	if req.wf.Identity == definitionIdentity {
+		recorded, _, err := writeRecordedDecisions(req.root, req.l, runID, req.target)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if recorded != "" {
+			ctx.ReadFirst = append(ctx.ReadFirst, adapter.ReadFirstFile{Path: recorded,
+				Purpose: "decisions and deferred notes already recorded in the other Specifications, with their source and approval state"})
+		}
+	}
 	if knowledge, err := req.l.KnowledgeFiles(); err == nil {
 		ctx.Knowledge = knowledge
 	}
