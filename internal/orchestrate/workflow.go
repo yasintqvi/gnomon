@@ -1,6 +1,7 @@
 package orchestrate
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -386,6 +387,12 @@ func implementWithAdapter(root string, l project.Layout, wf contract.Workflow, s
 // does afterward is reported as a warning on the Report — never restored, never a reason to
 // reject. Wrapped here rather than in obtainOutcome because it needs to annotate the final Report.
 func execute(req runRequest) (rep *present.Report, outcome *result.Outcome, err error) {
+	// Early check so a refused run never asks which Agent to use; obtainOutcome's own acquisition
+	// is the one that counts.
+	if active := probeRunLock(req.root); active != nil {
+		return runActiveReport(req.target, active), nil, active
+	}
+
 	ad := req.adapter
 	if ad == nil {
 		ad, err = ResolveAgent(req.agentOverride, req.chooser)
@@ -408,7 +415,8 @@ func execute(req runRequest) (rep *present.Report, outcome *result.Outcome, err 
 		return nil, nil, snapErr
 	}
 	defer func() {
-		if rep == nil {
+		var active *RunActiveError
+		if rep == nil || errors.As(err, &active) {
 			return
 		}
 		lost, lostErr := lostApprovals(req.l, approvedBefore, governingSpecIdentity(req.wf, req.kind, req.target))
@@ -448,8 +456,23 @@ func governingSpecIdentity(wf contract.Workflow, kind targetKind, target string)
 //
 // This wraps the run guard: approval evidence, and (Rule A) the governing Specification's file,
 // are snapshotted before the run and compared after; either difference rejects the run outright
-// (runguard.go). A run lock excludes gnomon approve/revoke for the run's duration.
+// (runguard.go). The project's run lock (runlock.go) is taken first: while it is held, a second
+// Agent run in the same project and gnomon approve/revoke are refused.
 func obtainOutcome(req runRequest) (outcome *result.Outcome, detail []string, failureRep *present.Report, err error) {
+	runID, err := result.NewRunID()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	unlock, err := acquireRunLock(req.root, runID, req.wf.Identity, req.target)
+	if err != nil {
+		var active *RunActiveError
+		if errors.As(err, &active) {
+			return nil, nil, runActiveReport(req.target, active), err
+		}
+		return nil, nil, nil, err
+	}
+	defer unlock()
+
 	approvalsDir := req.l.ApprovalsDir()
 	before, err := snapshotTree(approvalsDir)
 	if err != nil {
@@ -464,15 +487,6 @@ func obtainOutcome(req runRequest) (outcome *result.Outcome, detail []string, fa
 		}
 	}
 
-	runID, err := result.NewRunID()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	unlock, err := acquireRunLock(req.root, runID, req.wf.Identity)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	defer unlock()
 	defer func() {
 		// Runs on every path, including an otherwise-successful result, since that result is
 		// still rejected if the Agent touched approval evidence or the governing Specification.

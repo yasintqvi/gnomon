@@ -2,13 +2,11 @@ package orchestrate
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"gnomon/internal/approval"
 	"gnomon/internal/facts"
@@ -475,64 +473,4 @@ func lostApprovalSection(lost []string) present.Section {
 		lines = append(lines, fmt.Sprintf("%s (content changed or removed during this run)", id))
 	}
 	return present.Section{Label: "Other Approvals Lost", Body: strings.Join(lines, "\n")}
-}
-
-// --- Run lock: excludes approve/revoke for the duration of one Agent run ---
-
-const runLockName = "run.lock"
-
-// runLock is the content of the transient run.lock file — informational only. Nothing detects a
-// stale lock automatically; a Human decides whether it's safe to delete one after a crash.
-type runLock struct {
-	RunID            string `json:"run_id"`
-	WorkflowIdentity string `json:"workflow_identity"`
-	StartedAt        string `json:"started_at"`
-}
-
-func runLockPath(root string) (string, error) {
-	dir, err := result.TransientDir(root)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, runLockName), nil
-}
-
-// acquireRunLock writes root's run.lock for the duration of one Agent run, returning a release
-// function the caller must defer immediately. It does not check for an existing lock first —
-// concurrent gnomon processes on the same Specification are out of scope.
-func acquireRunLock(root, runID, workflowIdentity string) (release func(), err error) {
-	path, err := runLockPath(root)
-	if err != nil {
-		return nil, err
-	}
-	data, err := json.MarshalIndent(runLock{
-		RunID:            runID,
-		WorkflowIdentity: workflowIdentity,
-		StartedAt:        time.Now().UTC().Format(time.RFC3339Nano),
-	}, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return nil, err
-	}
-	return func() { os.Remove(path) }, nil
-}
-
-// refuseIfRunActive refuses when an Agent workflow run is in progress for root — approve/revoke
-// call this first so a run in progress never races with an approval change mid-check.
-func refuseIfRunActive(root string) error {
-	path, err := runLockPath(root)
-	if err != nil {
-		return err
-	}
-	if _, statErr := os.Stat(path); statErr != nil {
-		if os.IsNotExist(statErr) {
-			return nil
-		}
-		return statErr
-	}
-	return fmt.Errorf(
-		"an Agent workflow run is in progress; approval changes are not allowed until it ends. "+
-			"If no run is actually active (for example, gnomon crashed), delete %s and retry", path)
 }

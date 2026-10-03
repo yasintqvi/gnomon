@@ -308,7 +308,7 @@ func TestRefuseIfRunActive_LockPresent_ApproveAndRevokeRefuseWriteNothing(t *tes
 		t.Fatal(err)
 	}
 
-	unlock, err := acquireRunLock(root, "test-run-id", "implementation")
+	unlock, err := acquireRunLock(root, "test-run-id", "implementation", "SPEC-001")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,14 +374,19 @@ func TestRunLock_AbsentAfterRejectedRun(t *testing.T) {
 	assertNoRunLock(t, root)
 }
 
+// assertNoRunLock checks that no run holds the project lock any more and that the holder
+// description was cleared. The lock file itself is kept on purpose (runlock.go).
 func assertNoRunLock(t *testing.T, root string) {
 	t.Helper()
+	if active := probeRunLock(root); active != nil {
+		t.Fatalf("expected the run lock to be released, still held: %v", active)
+	}
 	path, err := runLockPath(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
-		t.Fatalf("expected no run.lock file to remain, stat err: %v", statErr)
+	if data, readErr := os.ReadFile(path); readErr == nil && len(data) != 0 {
+		t.Fatalf("expected the holder description cleared, got %q", data)
 	}
 }
 
