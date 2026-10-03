@@ -40,6 +40,8 @@ type runRequest struct {
 	agentOverride string
 	chooser       AgentChooser
 	adapter       adapter.Adapter
+	verification  VerificationOptions // Verification only
+	scopeNote     string              // set by execute for Verification
 }
 
 // Implement performs `gnomon implement <SPEC-id>`. Eligibility is checked before any Agent
@@ -216,6 +218,12 @@ func Run(root, workflowIdentity, target, agentOverride string, chooser AgentChoo
 // findings (extracted via ActionableFindings) for the interactive resolution loop. findings is
 // nil for every other identity, and for a clean PASS — never treated as an error either way.
 func RunEvaluation(root, workflowIdentity, target, agentOverride string, chooser AgentChooser) (*present.Report, []EvaluationFinding, error) {
+	return RunEvaluationWithOptions(root, workflowIdentity, target, agentOverride, chooser, VerificationOptions{})
+}
+
+// RunEvaluationWithOptions is RunEvaluation with Verification's scope options (--full, --since),
+// which are refused for any other workflow.
+func RunEvaluationWithOptions(root, workflowIdentity, target, agentOverride string, chooser AgentChooser, opts VerificationOptions) (*present.Report, []EvaluationFinding, error) {
 	l, err := project.Locate(root)
 	if err != nil {
 		return nil, nil, err
@@ -233,7 +241,17 @@ func RunEvaluation(root, workflowIdentity, target, agentOverride string, chooser
 		return nil, nil, err
 	}
 
-	rep, outcome, err := runEligible(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetKindFor(wf), target: target, agentOverride: agentOverride, chooser: chooser})
+	if (opts.Full || opts.Since != "") && wf.Identity != verificationIdentity {
+		return nil, nil, fmt.Errorf("--full and --since apply only to verification, not %s", wf.Identity)
+	}
+	if opts.Full && opts.Since != "" {
+		return nil, nil, fmt.Errorf("--full checks everything; it cannot be combined with --since")
+	}
+	if opts.Since != "" && target != "" {
+		return nil, nil, fmt.Errorf("--since limits verification to a change; it cannot be combined with a target")
+	}
+
+	rep, outcome, err := runEligible(runRequest{root: root, l: l, wf: wf, workflowPath: workflowPath, kind: targetKindFor(wf), target: target, agentOverride: agentOverride, chooser: chooser, verification: opts})
 	if outcome == nil {
 		return rep, nil, err
 	}
@@ -393,6 +411,20 @@ func execute(req runRequest) (rep *present.Report, outcome *result.Outcome, err 
 		return runActiveReport(req.target, active), nil, active
 	}
 
+	var scope *verificationScope
+	if req.wf.Identity == verificationIdentity {
+		var nothingToDo *present.Report
+		scope, nothingToDo, err = decideVerificationScope(req.l, req.target, req.verification)
+		if err != nil {
+			return nil, nil, err
+		}
+		if nothingToDo != nil {
+			nothingToDo.Target = req.target
+			return nothingToDo, nil, nil
+		}
+		req.scopeNote = scope.note
+	}
+
 	ad := req.adapter
 	if ad == nil {
 		ad, err = ResolveAgent(req.agentOverride, req.chooser)
@@ -434,9 +466,14 @@ func execute(req runRequest) (rep *present.Report, outcome *result.Outcome, err 
 		return
 	}
 	if req.wf.Identity == verificationIdentity {
-		enforceEvidence(outcome)
+		enforceEvidence(outcome, req.l.Root)
 	}
 	rep, err = classifyAndRender(req.wf, req.target, detail, outcome)
+	if scope != nil && scope.recordState && err == nil && outcome != nil && outcome.Terminal == "PASS" {
+		if recErr := recordVerificationState(req.l.Root, scope); recErr != nil && rep != nil {
+			rep.AddSection("Baseline Not Recorded", "This passing verification could not be recorded as the starting point for the next one ("+recErr.Error()+"); the next standard run will check the same changes again.")
+		}
+	}
 	return
 }
 
@@ -564,6 +601,7 @@ func obtainOutcomeUnguarded(req runRequest, runID string) (*result.Outcome, []st
 	case targetGeneric:
 		ctx.Target = req.target
 	}
+	ctx.ScopeNote = req.scopeNote
 	if knowledge, err := req.l.KnowledgeFiles(); err == nil {
 		ctx.Knowledge = knowledge
 	}

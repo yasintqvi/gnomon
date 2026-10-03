@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 )
 
@@ -112,6 +113,54 @@ func gitConfig(root, key string) (string, error) {
 			return "", nil
 		}
 		return "", fmt.Errorf("running git config %s: %w", key, err)
+	}
+	return strings.TrimSpace(out.String()), nil
+}
+
+// Head returns the full commit id of HEAD in root's repository.
+func Head(root string) (string, error) {
+	return gitOutput(root, "resolving HEAD", "rev-parse", "--verify", "HEAD^{commit}")
+}
+
+// ResolveCommit returns the full commit id ref names, or an error if it names no commit.
+func ResolveCommit(root, ref string) (string, error) {
+	return gitOutput(root, "resolving "+ref, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
+}
+
+// ChangedSince lists every file under root that differs from commit base: committed since base,
+// staged, unstaged, or untracked (ignored files excluded). Paths are relative to root, with
+// forward slashes, sorted and unique.
+func ChangedSince(root, base string) ([]string, error) {
+	diff, err := gitOutput(root, "listing changes since "+base, "diff", "--name-only", "--relative", "--no-renames", base, "--")
+	if err != nil {
+		return nil, err
+	}
+	untracked, err := gitOutput(root, "listing untracked files", "ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var paths []string
+	for _, line := range strings.Split(diff+"\n"+untracked, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || seen[line] {
+			continue
+		}
+		seen[line] = true
+		paths = append(paths, line)
+	}
+	sort.Strings(paths)
+	return paths, nil
+}
+
+func gitOutput(root, action string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = root
+	var out, stderr bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", wrapGitError(action, err, stderr.String())
 	}
 	return strings.TrimSpace(out.String()), nil
 }

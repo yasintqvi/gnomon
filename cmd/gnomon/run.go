@@ -26,6 +26,8 @@ invoked outside the interactive workspace, by its own declared identity:
 
   gnomon run implementation SPEC-014
   gnomon run testing SPEC-014
+  gnomon run verification              (what changed since the last passing verification)
+  gnomon run verification --full       (every Approved Specification, checked independently)
   gnomon run verification src/auth/
   gnomon run review src/auth/
   gnomon run specification-definition SPEC-014
@@ -47,7 +49,8 @@ built-in one is.`,
 		if len(args) == 2 {
 			target = args[1]
 		}
-		report, findings, err := orchestrate.RunEvaluation(root, args[0], target, *runAgentFlag, agentChooserForInvocation())
+		opts := orchestrate.VerificationOptions{Full: *runFullFlag, Since: *runSinceFlag}
+		report, findings, err := orchestrate.RunEvaluationWithOptions(root, args[0], target, *runAgentFlag, agentChooserForInvocation(), opts)
 		// Offered only with a real interactive terminal — non-interactive invocations always fall
 		// through to plain renderReport, never prompting or hanging.
 		if len(findings) > 0 && stdinIsInteractive() {
@@ -57,9 +60,15 @@ built-in one is.`,
 	},
 }
 
-var runAgentFlag *string
+var (
+	runAgentFlag *string
+	runFullFlag  *bool
+	runSinceFlag *string
+)
 
 func init() {
 	runAgentFlag = registerAgentFlag(runCmd)
+	runFullFlag = runCmd.Flags().Bool("full", false, "verification only: check every criterion of every Approved Specification (or of the target) independently")
+	runSinceFlag = runCmd.Flags().String("since", "", "verification only: check the changes since this Git ref instead of since the last passing verification")
 	rootCmd.AddCommand(runCmd)
 }

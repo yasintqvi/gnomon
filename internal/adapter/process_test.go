@@ -322,3 +322,15 @@ func TestProcessAdapter_PromptFileRemoved_AfterFailure(t *testing.T) {
 		t.Fatalf("expected the prompt file to be removed after a failing run")
 	}
 }
+
+func TestBuildPrompt_ScopeNotePassedThroughVerbatim(t *testing.T) {
+	ctx := Context{WorkflowIdentity: "verification", WorkflowPath: "w.md", ResultPath: "r.json", RunID: "r1",
+		ScopeNote: "Verification mode: standard check of the changes since abc.\nOther changed files (1): app/x.py"}
+	p := buildPrompt(ctx)
+	if !strings.Contains(p, "Scope for this run:\n"+ctx.ScopeNote+"\n") {
+		t.Fatalf("expected the scope note verbatim in the prompt:\n%s", p)
+	}
+	if strings.Contains(buildPrompt(Context{WorkflowIdentity: "implementation"}), "Scope for this run") {
+		t.Fatal("no scope section when there is no scope note")
+	}
+}

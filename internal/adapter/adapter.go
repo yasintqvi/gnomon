@@ -19,7 +19,12 @@ type Context struct {
 
 	// Target is a free-form, untyped invocation target (Verification, Review) — never checked as
 	// a Specification (cli/WORKFLOW_CONTRACT.md). Mutually exclusive with SpecIdentity.
-	Target     string // "" when not applicable
+	Target string // "" when not applicable
+
+	// ScopeNote is extra, workflow-specific text about what this run covers (Verification's mode
+	// and change set) — passed through to the Agent verbatim, never interpreted here.
+	ScopeNote string
+
 	ResultPath string
 	RunID      string
 

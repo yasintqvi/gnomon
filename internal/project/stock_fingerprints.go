@@ -180,6 +180,7 @@ var stockFingerprints = map[string][]string{
 	},
 	"verification.md": {
 		"0513ed3a1dfa8f4f05ad99be9a458433f565b3386c73b6f7c49b33ca0917dee0",
+		"0d5b3fa4482e6a811c4dbeda1a8421fcda6ad7d5fbb6b2acada3d97a201d07a1",
 		"15a27b1904c6b6f18da60303878ac128dabb2cbe609cd331e937bf4aca5d09cb",
 		"6bdadce69cf1f8d2f1b4e93e0e37393d5069d2f5a882fe18fba6bead1714a96b",
 		"7a7cb4d46317554fc75cc5da9ac0a842a839c76461fa84bce59e11f74bb305fd",

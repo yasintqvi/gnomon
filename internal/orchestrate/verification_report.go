@@ -2,6 +2,8 @@ package orchestrate
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"gnomon/internal/present"
@@ -14,6 +16,32 @@ const verificationIdentity = "verification"
 // noEvidenceNote replaces the evidence of a criterion reported as passing with nothing to show.
 const noEvidenceNote = "No evidence was reported, so this criterion is unverified."
 
+// missingTestNote prefixes the evidence of a criterion whose cited test cannot be found.
+const missingTestNote = "The cited test %s was not found in the project, so this criterion is unverified."
+
+// citedTestExists checks a cited test reference ("path", "path::name" or "path::Class::name")
+// against the project: the file must exist under projectRoot, and the last name, if given, must
+// appear in it. It proves the test is real, not that it asserts the criterion.
+func citedTestExists(projectRoot, cited string) bool {
+	parts := strings.Split(cited, "::")
+	file := strings.TrimSpace(parts[0])
+	if file == "" || filepath.IsAbs(file) || strings.HasPrefix(filepath.Clean(file), "..") {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Join(projectRoot, filepath.FromSlash(file)))
+	if err != nil {
+		return false
+	}
+	if len(parts) == 1 {
+		return true
+	}
+	name := strings.TrimSpace(parts[len(parts)-1])
+	if i := strings.IndexAny(name, "[( "); i >= 0 {
+		name = name[:i] // parametrized ids, call parentheses
+	}
+	return name != "" && strings.Contains(string(data), name)
+}
+
 // evidenceDisclaimer accompanies every verification report.
 const evidenceDisclaimer = "The Agent gathered and reported this evidence. It shows what was checked and how, not independent proof that the product works."
 
@@ -22,12 +50,13 @@ const evidenceDisclaimer = "The Agent gathered and reported this evidence. It sh
 const conflictResolution = "knowledge-resolution"
 
 // enforceEvidence makes a Verification result unable to claim more than its evidence shows: a
-// criterion reported PASS without evidence becomes UNVERIFIABLE, a criterion that names a
+// criterion reported PASS without evidence, or resting on a cited test (test) that does not exist
+// in the project, becomes UNVERIFIABLE; a criterion that names a
 // conflicting approved statement (conflicts_with) is CONFLICT whatever the Agent concluded, and
 // the overall result is lowered (never raised) to the worst criterion's — a CONFLICT counts as
 // FAIL there, and PASS overall also requires at least one criterion. It edits outcome in place,
 // so the classification, report, and finding extraction all see it.
-func enforceEvidence(outcome *result.Outcome) {
+func enforceEvidence(outcome *result.Outcome, projectRoot string) {
 	items, _ := outcome.Payload["evidence"].([]interface{})
 	worst := "PASS"
 	if len(items) == 0 {
@@ -45,6 +74,13 @@ func enforceEvidence(outcome *result.Outcome) {
 		}
 		if res == "CONFLICT" {
 			item["recommended_workflow"] = conflictResolution
+		}
+		if res == "PASS" {
+			if cited := strings.TrimSpace(payloadString(item, "test")); cited != "" && !citedTestExists(projectRoot, cited) {
+				res = "UNVERIFIABLE"
+				item["result"] = res
+				item["evidence"] = joinNonEmpty(fmt.Sprintf(missingTestNote, cited), payloadString(item, "evidence"))
+			}
 		}
 		if res == "PASS" && strings.TrimSpace(payloadString(item, "evidence")) == "" {
 			res = "UNVERIFIABLE"
@@ -110,6 +146,9 @@ func renderVerification(rep *present.Report, payload map[string]interface{}) {
 		evidence := strings.TrimSpace(payloadString(item, "evidence"))
 		if evidence == "" {
 			evidence = "none reported"
+		}
+		if test := strings.TrimSpace(payloadString(item, "test")); test != "" {
+			lines = append(lines, fmt.Sprintf("   %-10s Test: %s", "", test))
 		}
 		lines = append(lines, fmt.Sprintf("   %-10s Evidence: %s", "", indentContinuation(evidence)))
 		if word == "conflict" {

@@ -102,6 +102,8 @@ gnomon run <workflow-identity> [target]
 
 Every Agent-invoking command (`describe`, `bootstrap`, `spec discover`, `spec define`, `implement`, `test`, `verify`, `review`, `finalize`, `run`) additionally accepts a shared `--agent claude|codex` flag, overriding the resolved provider for that one invocation only — it never modifies the persisted default `agent set-default` controls. Deterministic commands never accept it, since they never touch an Agent at all.
 
+`gnomon run verification` also accepts `--full` (every criterion of every Approved Specification, or of the target, checked independently) and `--since <ref>` (check the changes since that Git ref). Without either and without a target, it checks what changed since the last passing verification recorded in this working copy (`.gnomon-runtime/verification-state.json`); with nothing changed it starts no Agent. Conflict checks always cover every Approved Specification. Both flags are refused for any other workflow.
+
 ---
 
 ## The `run` Rule

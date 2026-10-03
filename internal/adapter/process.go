@@ -166,6 +166,10 @@ func buildPrompt(ctx Context) string {
 		fmt.Fprintf(&b, "\nThe target for this run is: %s\n", ctx.Target)
 	}
 
+	if ctx.ScopeNote != "" {
+		fmt.Fprintf(&b, "\nScope for this run:\n%s\n", ctx.ScopeNote)
+	}
+
 	if len(ctx.Knowledge) > 0 {
 		b.WriteString("\nProject knowledge recorded in .gnomon/ (read only what this task needs):\n")
 		for _, k := range ctx.Knowledge {
