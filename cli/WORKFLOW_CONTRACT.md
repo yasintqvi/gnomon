@@ -140,8 +140,9 @@ result:
           properties:
             obligation: { type: string }
             source: { type: [string, "null"] }
-            result: { type: string, enum: [PASS, FAIL, UNVERIFIABLE] }
+            result: { type: string, enum: [PASS, FAIL, CONFLICT, UNVERIFIABLE] }
             evidence: { type: [string, "null"] }
+            conflicts_with: { type: [string, "null"] }
       summary:
         type: object
         required: [aggregate]
@@ -170,6 +171,8 @@ Derived directly from each workflow's own current Outputs section, not reinterpr
 | Verification | `summary.aggregate` | `PASS \| FAIL \| UNVERIFIABLE` | success \| blocked \| blocked |
 | Review | `summary.aggregate` | `DEFECT \| RISK \| KNOWLEDGE GAP \| PASS` | blocked \| blocked \| blocked \| success |
 | Git Finalization | `outcome` | `COMMIT_PREPARED \| PUBLISHED \| BLOCKED` | success \| success \| blocked |
+
+A Verification criterion's `CONFLICT` (approved Specifications contradict each other about it; `conflicts_with` names the other statement) is never a terminal value: it counts as `FAIL` in `summary.aggregate`, which keeps its three values, and Gnomon enforces that (any criterion with `conflicts_with` set is `CONFLICT`, routed to knowledge resolution).
 
 Verification and Review are the only two workflows whose terminal value is nested under a summary block rather than sitting at the payload's top level — a direct, unmodified consequence of how their Outputs sections are already structured (see `result.terminal_path` above), not a new distinction introduced here. `NO_CANDIDATE_IDENTIFIED` and `COMMIT_PREPARED` both classify as `success` despite not being the "fullest" possible outcome (a proposed candidate, a published change) — both are legitimate, non-blocked terminal states their own Outputs prose describes as ordinary, not partial failures.
 

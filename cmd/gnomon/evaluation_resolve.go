@@ -267,11 +267,11 @@ func pluralize(n int, singular, plural string) string {
 	return plural
 }
 
-// classificationStyle maps each classification onto Gnomon's usual vocabulary: DEFECT/FAIL as
-// failure (red), RISK/UNVERIFIABLE/KNOWLEDGE GAP as needs-attention (yellow).
+// classificationStyle maps each classification onto Gnomon's usual vocabulary: DEFECT/FAIL/CONFLICT
+// as failure (red), RISK/UNVERIFIABLE/KNOWLEDGE GAP as needs-attention (yellow).
 func classificationStyle(p present.Palette, classification string) string {
 	switch classification {
-	case "DEFECT", "FAIL":
+	case "DEFECT", "FAIL", "CONFLICT":
 		return p.Bad(classification)
 	default: // RISK, UNVERIFIABLE, KNOWLEDGE GAP
 		return p.Warn(classification)

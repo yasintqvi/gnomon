@@ -196,7 +196,7 @@ The smallest useful set, all already available from mechanisms already defined: 
 
 **Specification Definition** — `terminal_path: outcome`, with `remaining_unresolved` validated as an array of `{gap, owner, decision_pending}` objects — array item boundaries are syntactic, never inferred from prose.
 
-**Verification** — `terminal_path: summary.aggregate`; `obligations` validated as an array of `{obligation, source, result: enum[PASS,FAIL,UNVERIFIABLE], evidence}` objects.
+**Verification** — `terminal_path: summary.aggregate`; `obligations` validated as an array of `{obligation, source, result: enum[PASS,FAIL,CONFLICT,UNVERIFIABLE], evidence, conflicts_with}` objects.
 
 **Review** — `terminal_path: summary.aggregate`; `findings` validated as an array of `{finding_id, classification: enum[...], decision_required, ...}` objects.
 

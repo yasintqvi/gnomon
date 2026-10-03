@@ -17,10 +17,16 @@ const noEvidenceNote = "No evidence was reported, so this criterion is unverifie
 // evidenceDisclaimer accompanies every verification report.
 const evidenceDisclaimer = "The Agent gathered and reported this evidence. It shows what was checked and how, not independent proof that the product works."
 
+// conflictResolution is the only next step offered for a CONFLICT: the approved texts have to be
+// reconciled before either can be met.
+const conflictResolution = "knowledge-resolution"
+
 // enforceEvidence makes a Verification result unable to claim more than its evidence shows: a
-// criterion reported PASS without evidence becomes UNVERIFIABLE, and the overall result is lowered
-// (never raised) to the worst criterion's — PASS overall also requires at least one criterion.
-// It edits outcome in place, so the classification, report, and finding extraction all see it.
+// criterion reported PASS without evidence becomes UNVERIFIABLE, a criterion that names a
+// conflicting approved statement (conflicts_with) is CONFLICT whatever the Agent concluded, and
+// the overall result is lowered (never raised) to the worst criterion's — a CONFLICT counts as
+// FAIL there, and PASS overall also requires at least one criterion. It edits outcome in place,
+// so the classification, report, and finding extraction all see it.
 func enforceEvidence(outcome *result.Outcome) {
 	items, _ := outcome.Payload["evidence"].([]interface{})
 	worst := "PASS"
@@ -33,6 +39,13 @@ func enforceEvidence(outcome *result.Outcome) {
 			continue
 		}
 		res := payloadString(item, "result")
+		if strings.TrimSpace(payloadString(item, "conflicts_with")) != "" {
+			res = "CONFLICT"
+			item["result"] = res
+		}
+		if res == "CONFLICT" {
+			item["recommended_workflow"] = conflictResolution
+		}
 		if res == "PASS" && strings.TrimSpace(payloadString(item, "evidence")) == "" {
 			res = "UNVERIFIABLE"
 			item["result"] = res
@@ -50,8 +63,12 @@ func enforceEvidence(outcome *result.Outcome) {
 	outcome.Terminal = aggregate
 }
 
-// worseResult orders FAIL > UNVERIFIABLE > PASS.
+// worseResult orders FAIL > UNVERIFIABLE > PASS for the overall result. A criterion's CONFLICT
+// counts as FAIL: the overall result keeps the contract's three values.
 func worseResult(a, b string) string {
+	if b == "CONFLICT" {
+		b = "FAIL"
+	}
 	rank := map[string]int{"PASS": 0, "UNVERIFIABLE": 1, "FAIL": 2}
 	if rank[b] > rank[a] {
 		return b
@@ -66,6 +83,8 @@ func resultWord(res string) string {
 		return "passed"
 	case "FAIL":
 		return "failed"
+	case "CONFLICT":
+		return "conflict"
 	default:
 		return "unverified"
 	}
@@ -93,6 +112,13 @@ func renderVerification(rep *present.Report, payload map[string]interface{}) {
 			evidence = "none reported"
 		}
 		lines = append(lines, fmt.Sprintf("   %-10s Evidence: %s", "", indentContinuation(evidence)))
+		if word == "conflict" {
+			with := strings.TrimSpace(payloadString(item, "conflicts_with"))
+			if with == "" {
+				with = "not named by the Agent"
+			}
+			lines = append(lines, fmt.Sprintf("   %-10s Conflicts with: %s", "", indentContinuation(with)))
+		}
 	}
 
 	if len(lines) == 0 {
@@ -100,7 +126,14 @@ func renderVerification(rep *present.Report, payload map[string]interface{}) {
 		rep.AddSection("Criteria", "No criteria were reported, so nothing is verified.")
 	} else {
 		rep.Summary = fmt.Sprintf("Verification: %d passed, %d failed, %d unverified", counts["passed"], counts["failed"], counts["unverified"])
+		if counts["conflict"] > 0 {
+			rep.Summary = fmt.Sprintf("Verification: %d passed, %d failed, %d in conflict, %d unverified", counts["passed"], counts["failed"], counts["conflict"], counts["unverified"])
+		}
 		rep.AddSection("Criteria", strings.Join(lines, "\n"))
+		if counts["conflict"] > 0 {
+			rep.AddSection("Conflicts", "Approved Specifications contradict each other about the criteria marked conflict, so they cannot pass as written. "+
+				"Reconcile the approved texts (Define on the affected Specifications, then approve), and verify again.")
+		}
 	}
 	if summary, _ := payload["summary"].(map[string]interface{}); summary != nil {
 		if scope := payloadString(summary, "obligations_evaluated"); scope != "" {

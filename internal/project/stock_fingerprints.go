@@ -67,6 +67,7 @@ var stockFingerprints = map[string][]string{
 		"27ed3b23a1cf20f4a24c66b8de028457444c75b314d496a77be27bdf16254379",
 	},
 	"VERIFICATION_CRITERIA.md": {
+		"2c036db0783a6244088ebc3a88467acede0bcee36efaa06c42c40a869a96857b",
 		"9ae930c4478eb345fb51ae46256723fa7136559cf1a32d7c50d65b3aa0a04c82",
 	},
 	"action.md": {
@@ -180,6 +181,7 @@ var stockFingerprints = map[string][]string{
 	"verification.md": {
 		"0513ed3a1dfa8f4f05ad99be9a458433f565b3386c73b6f7c49b33ca0917dee0",
 		"15a27b1904c6b6f18da60303878ac128dabb2cbe609cd331e937bf4aca5d09cb",
+		"6bdadce69cf1f8d2f1b4e93e0e37393d5069d2f5a882fe18fba6bead1714a96b",
 		"7a7cb4d46317554fc75cc5da9ac0a842a839c76461fa84bce59e11f74bb305fd",
 		"9768d34019b14d97992b73888510d2a44313b5da632d35d70bc4a74fd805f5d1",
 		"9e4907fd456324cafff84311314f717ecbe4b0eb7ff961e495ff36f0f33c1275",

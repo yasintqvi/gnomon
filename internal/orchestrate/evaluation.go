@@ -2,6 +2,7 @@ package orchestrate
 
 import (
 	"fmt"
+	"strings"
 
 	"gnomon/internal/adapter"
 	"gnomon/internal/present"
@@ -37,7 +38,7 @@ func IsDispatchableResolution(approach string) bool {
 // order); Review's own stable per-report finding_id is carried through as-is.
 type EvaluationFinding struct {
 	ID             string
-	Classification string // "FAIL" | "UNVERIFIABLE" (Verification), or "DEFECT" | "RISK" | "KNOWLEDGE GAP" (Review)
+	Classification string // "FAIL" | "CONFLICT" | "UNVERIFIABLE" (Verification), or "DEFECT" | "RISK" | "KNOWLEDGE GAP" (Review)
 	Headline       string // Verification: the obligation text. Review: the finding summary.
 	Detail         string // Supporting evidence — and, for Review, reasoning/impact — exactly as the Agent reported it, never reworded.
 
@@ -87,11 +88,20 @@ func actionableVerificationFindings(payload map[string]interface{}) []Evaluation
 			ID:                  fmt.Sprintf("F-%03d", n),
 			Classification:      result,
 			Headline:            payloadString(item, "obligation"),
-			Detail:              payloadString(item, "evidence"),
+			Detail:              verificationFindingDetail(item),
 			RecommendedWorkflow: safeResolution(payloadString(item, "recommended_workflow")),
 		})
 	}
 	return findings
+}
+
+// verificationFindingDetail is a finding's evidence, plus the conflicting statement for a CONFLICT.
+func verificationFindingDetail(item map[string]interface{}) string {
+	detail := payloadString(item, "evidence")
+	if with := strings.TrimSpace(payloadString(item, "conflicts_with")); with != "" {
+		detail = joinNonEmpty(detail, "Conflicts with: "+with)
+	}
+	return detail
 }
 
 // actionableReviewFindings reads the "findings" array as-is: review.md's Step 5 ("Produce

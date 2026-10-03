@@ -92,6 +92,7 @@ Every criterion must produce one of the following results:
 
 - PASS
 - FAIL
+- CONFLICT (approved Specifications contradict each other about the criterion; counts as not passed)
 - UNVERIFIABLE
 
 Supporting evidence is mandatory.
