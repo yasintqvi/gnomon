@@ -342,3 +342,13 @@ func TestBuildPrompt_ReadFirstFilesListed(t *testing.T) {
 		t.Fatalf("expected the read-first file in the prompt:\n%s", p)
 	}
 }
+
+func TestBuildPrompt_UserRequestPassedVerbatim(t *testing.T) {
+	p := buildPrompt(Context{WorkflowIdentity: "specification-definition", WorkflowPath: "w.md", UserRequest: "Add late fees.\n1 euro per day."})
+	if !strings.Contains(p, "The user's request for this run, in their own words:\nAdd late fees.\n1 euro per day.\n") {
+		t.Fatalf("expected the request verbatim:\n%s", p)
+	}
+	if strings.Contains(buildPrompt(Context{WorkflowIdentity: "implementation"}), "in their own words") {
+		t.Fatal("no request section when the user gave none")
+	}
+}

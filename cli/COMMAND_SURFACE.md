@@ -49,8 +49,9 @@ gnomon describe
 gnomon bootstrap
 
 gnomon spec discover
+gnomon define "<request>"            (new feature: creates the Draft, then Define)
+gnomon define <SPEC-id> [change]
 gnomon spec create <title>
-gnomon spec define <SPEC-id>
 
 gnomon approve <SPEC-id>
 gnomon revoke <SPEC-id>
@@ -82,6 +83,7 @@ gnomon run <workflow-identity> [target]
 | `spec discover` | Specification Discovery (Agent reasoning mode) | Agent workflow |
 | `spec create <title>` | Draft Creation (Step 1's deterministic carve-out) | CLI-native, no Agent |
 | `spec define <SPEC-id>` | Specification Definition | Agent workflow |
+| `define "<request>"` / `define <SPEC-id> [change]` | Draft Creation (new request only, or continuing the Draft started from the same request), then Specification Definition | Agent workflow |
 | `approve <SPEC-id>` | The Approval operation (Step 6) | CLI-native, Human-owned |
 | `revoke <SPEC-id>` | The Revocation operation (Step 6) | CLI-native, Human-owned |
 | `implement <SPEC-id>` | Implementation | Agent workflow |
@@ -100,7 +102,7 @@ gnomon run <workflow-identity> [target]
 
 `agent` is the first top-level noun with both a direct action (`gnomon agent` alone shows current state) and a subcommand (`agent set-default`) — unlike `spec`, which is purely a parent with no bare behavior of its own; this is a deliberate, minimal exception, not a silent departure from that pattern. `agent` and `agent set-default` are also the first commands that require no Gnomon project at all: which Agent provider to use is a Human/installation-level concern, not a project-level one, so both work from any directory, with or without `.gnomon/` present.
 
-Every Agent-invoking command (`describe`, `bootstrap`, `spec discover`, `spec define`, `implement`, `test`, `verify`, `review`, `finalize`, `run`) additionally accepts a shared `--agent claude|codex` flag, overriding the resolved provider for that one invocation only — it never modifies the persisted default `agent set-default` controls. Deterministic commands never accept it, since they never touch an Agent at all.
+Every Agent-invoking command (`describe`, `bootstrap`, `spec discover`, `spec define`, `define`, `implement`, `test`, `verify`, `review`, `finalize`, `run`) additionally accepts a shared `--agent claude|codex` flag, overriding the resolved provider for that one invocation only — it never modifies the persisted default `agent set-default` controls. Deterministic commands never accept it, since they never touch an Agent at all.
 
 `gnomon run verification` also accepts `--full` (every criterion of every Approved Specification, or of the target, checked independently) and `--since <ref>` (check the changes since that Git ref). Without either and without a target, it checks what changed since the last passing verification recorded in this working copy (`.gnomon-runtime/verification-state.json`); with nothing changed it starts no Agent. Conflict checks always cover every Approved Specification. Both flags are refused for any other workflow.
 

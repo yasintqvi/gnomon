@@ -166,6 +166,10 @@ func buildPrompt(ctx Context) string {
 		fmt.Fprintf(&b, "\nThe target for this run is: %s\n", ctx.Target)
 	}
 
+	if ctx.UserRequest != "" {
+		fmt.Fprintf(&b, "\nThe user's request for this run, in their own words:\n%s\n", ctx.UserRequest)
+	}
+
 	for _, f := range ctx.ReadFirst {
 		fmt.Fprintf(&b, "\nRead this file before anything else: %s — %s\n", f.Path, f.Purpose)
 	}

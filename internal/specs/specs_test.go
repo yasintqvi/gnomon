@@ -360,3 +360,15 @@ func TestClosestTemplate_PicksTheOriginatingTemplate(t *testing.T) {
 		t.Fatalf("expected the detailed template to be identified as the origin")
 	}
 }
+
+func TestAuthoredLines_IgnoresSavedRequest(t *testing.T) {
+	template := []byte("# SPEC-[ID] — [Use Case Name]\n\n## Goal\n\n[Who needs what]\n")
+	spec := []byte("# SPEC-001 — Late fees\n\n> Request: Add late fees.\n> 1 euro per day.\n\n## Goal\n\n[Who needs what]\n")
+	if got := AuthoredLines(template, spec, Identity("SPEC-001")); len(got) != 0 {
+		t.Fatalf("the saved request is not Specification content, got %v", got)
+	}
+	written := append(spec, []byte("Members pay late fees.\n")...)
+	if got := AuthoredLines(template, written, Identity("SPEC-001")); len(got) != 1 {
+		t.Fatalf("expected one authored line, got %v", got)
+	}
+}
