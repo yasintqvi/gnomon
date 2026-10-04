@@ -112,6 +112,8 @@ Do not define implementation-specific request structures.
 
 ## Acceptance Criteria
 
+One observable behavior each: the decided behaviors and the boundaries a plausible implementation could get wrong, usually about ten. Not the interface the request already fixes, and not a repeat of another criterion.
+
 ### [Criterion]
 
 **Given**
@@ -146,7 +148,7 @@ Do not define implementation-specific request structures.
 
 ## Decisions
 
-Questions whose answer changes what gets built, each with the answer the user gave.
+Questions whose answer changes what gets built, each once, with the answer the user gave. A decision already recorded elsewhere is referred to by its source, not repeated.
 
 * [Question] — [Answer]
 
