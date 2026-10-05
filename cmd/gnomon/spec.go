@@ -51,7 +51,9 @@ Every other lifecycle action has a non-interactive equivalent through
 var specCreateCmd = &cobra.Command{
 	Use:   "create <title>",
 	Short: "Create a new Draft Specification from the template",
-	Long: `Create a new Draft Specification.
+	Long: `Create a new Draft Specification, without running the Agent.
+
+To start a feature and define it in one step, use gnomon define "<request>" instead.
 
 The default template is short: Goal, Decisions (each question with the user's answer),
 Acceptance Criteria, and Out of Scope. --detailed uses the full use-case template

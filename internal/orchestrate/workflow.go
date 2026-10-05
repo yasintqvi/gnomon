@@ -42,6 +42,7 @@ type runRequest struct {
 	adapter       adapter.Adapter
 	verification  VerificationOptions // Verification only
 	scopeNote     string              // set by execute for Verification
+	request       string              // the user's own words for this run (gnomon define)
 }
 
 // Implement performs `gnomon implement <SPEC-id>`. Eligibility is checked before any Agent
@@ -602,6 +603,7 @@ func obtainOutcomeUnguarded(req runRequest, runID string) (*result.Outcome, []st
 		ctx.Target = req.target
 	}
 	ctx.ScopeNote = req.scopeNote
+	ctx.UserRequest = req.request
 	if req.wf.Identity == definitionIdentity {
 		recorded, _, err := writeRecordedDecisions(req.root, req.l, runID, req.target)
 		if err != nil {

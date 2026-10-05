@@ -159,6 +159,10 @@ func renderTemplate(template []byte, id Identity, title string) string {
 	return content
 }
 
+// RequestLinePrefix starts the block in which a Draft keeps the request it was started from
+// (`gnomon define "<request>"`), directly below its title.
+const RequestLinePrefix = "> Request: "
+
 // AuthoredLines returns the non-blank lines of spec that a freshly created Draft from template
 // would not contain — what someone actually wrote. Structural lines (separators, bare list
 // markers) never count.
@@ -168,8 +172,15 @@ func AuthoredLines(template, spec []byte, id Identity) []string {
 		rendered[strings.TrimSpace(line)] = true
 	}
 	var authored []string
+	inRequest := false
 	for _, line := range strings.Split(string(spec), "\n") {
 		t := strings.TrimSpace(line)
+		// The request a Draft was started from (gnomon define) is not Specification content.
+		if strings.HasPrefix(line, RequestLinePrefix) || (inRequest && strings.HasPrefix(line, ">")) {
+			inRequest = true
+			continue
+		}
+		inRequest = false
 		if t == "" || rendered[t] || strings.Trim(t, "-*#=_|: ") == "" {
 			continue
 		}

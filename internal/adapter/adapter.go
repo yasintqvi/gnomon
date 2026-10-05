@@ -25,6 +25,10 @@ type Context struct {
 	// and change set) — passed through to the Agent verbatim, never interpreted here.
 	ScopeNote string
 
+	// UserRequest is what the user asked for on the command line for this run, verbatim; "" when
+	// they gave nothing.
+	UserRequest string
+
 	// ReadFirst lists project-relative files the Agent must read before starting, each with why —
 	// prepared by the CLI for this run (e.g. decisions extracted from other Specifications).
 	ReadFirst []ReadFirstFile
